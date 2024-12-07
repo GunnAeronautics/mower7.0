@@ -1,3 +1,5 @@
+#include <WiFi.h>
+#include <BluetoothSerial.h>
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -20,40 +22,7 @@ float altitudeV;
 unsigned long lastT;
 int deltaT;
 // put function declarations here:
-class RollingAverage{
 
-  public:
-
-  int rollingLen;
-  float *rawData;//I can't get the size of this array to be parametric
-  //for some reason it always intializes as an array of inf and changing values in the constructor
-  //doesn't seem to work, this seems like the best option as nothing else FUCKING WORKS GAH!
-  //ok what the actual fuck initializing the array as {0,0,0,0...} doesnt fucking work either
-  int dataIndex;
-  int startFlag;
-  float average;
-
-  RollingAverage(){
-    rollingLen = 50;//default
-    dataIndex = 0;
-    average = 0.0;
-    rawData = new float[rollingLen]();
-  }
-
-  void newData(float data){
-
-    average = average + data;
-    average = average - rawData[dataIndex];
-    rawData[dataIndex] = data;
-    dataIndex ++;
-    dataIndex %= rollingLen;
-  }
-  float getData(){
-
-    return average / rollingLen;
-  }
-
-};
 RollingAverage pressureRoll;
 RollingAverage temperatureRoll;
 RollingAverage altitudeVRoll;
@@ -133,8 +102,23 @@ void baroData(void){
   pressure = (bmp.pressure / 100.0);//hPa
   pressureRoll.newData(pressure);
 }
+void altitudeProcessing(){
+  deltaT = micros()-lastT;
+  lastT = micros();
+  altitude = pressToAlt(pressureRoll.getData());
+  altitudeVRoll.newData((altitude - lastAltitude)/deltaT*1000000);
+}
 void setup() {
   Serial.begin(115200);
+  
+  // Disable Wi-Fi
+  WiFi.mode(WIFI_OFF);
+  WiFi.disconnect(true);
+  // Disable Bluetooth
+  btStop();
+
+
+  pinMode(34, OUTPUT);
   IMUsetup();
   baroSetup();
   delay(1000);
@@ -147,18 +131,16 @@ void setup() {
   Serial.println("start");
   lastT = micros();
   lastAltitude = pressToAlt(pressureRoll.getData());
- }
+  }
 
 void loop() {
-  deltaT = micros()-lastT;
-  lastT = micros();
+  
   accelData();
   gyroData();
   baroData();
+  altitudeProcessing();
   
-  altitude = pressToAlt(pressureRoll.getData());
-  altitudeVRoll.newData((altitude - lastAltitude)/deltaT*1000000);
-  lastAltitude = altitude;
+  // lastAltitude = altitude;
    //Serial.print(",accelX:");
    //Serial.print(groundPressure);
   // Serial.print(", accelY:");
@@ -176,24 +158,19 @@ void loop() {
   */
   
   
-  altitude = pressToAlt(pressureRoll.getData());
+  //altitude = pressToAlt(pressureRoll.getData());
   
   //Serial.print(", pressure:");
   //Serial.print(pressure);
   //Serial.print(", temperature:");
   //Serial.print(temperature);
-  Serial.print(", time:");
-  Serial.print(altitudeVRoll.getData());
+  //Serial.print(", time:");
+  //Serial.print(altitudeVRoll.getData());
   
   //Serial.print(", startingPressure:");
   //Serial.print(groundPressure);
-  Serial.print(", altitude2.0:");
-  Serial.print(altitude);
+  //Serial.print(", altitude2.0:");
+  //Serial.print(altitude);
 
-  Serial.println( );
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  //Serial.println( );
 }
