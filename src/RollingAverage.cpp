@@ -1,5 +1,6 @@
 
-#include RollingAverage.h
+#include <RollingAverage.h>
+
 
 
 RollingAverage::RollingAverage(){
@@ -9,7 +10,7 @@ RollingAverage::RollingAverage(){
     rawData = new float[rollingLen]();
   }
 
-RollingAverage::newData(float data){
+void RollingAverage::newData(float data){
 
     average = average + data;
     average = average - rawData[dataIndex];
@@ -18,7 +19,7 @@ RollingAverage::newData(float data){
     dataIndex %= rollingLen;
   }
 
-RollingAverage::getData(){
+float RollingAverage::getData(){
 
     return average / rollingLen;
   }
