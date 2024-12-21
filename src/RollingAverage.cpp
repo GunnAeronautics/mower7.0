@@ -3,8 +3,8 @@
 
 
 
-RollingAverage::RollingAverage(){
-    rollingLen = 50;//default
+RollingAverage::RollingAverage(int rollLen){
+    rollingLen = rollLen;//default
     dataIndex = 0;
     average = 0.0;
     rawData = new float[rollingLen]();

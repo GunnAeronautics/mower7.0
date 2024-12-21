@@ -2,7 +2,7 @@ class RollingAverage{
 
   public:
   int rollingLen;
-  RollingAverage();
+  RollingAverage(int rollLen);
   void newData(float data);
   float getData();
   
