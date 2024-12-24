@@ -1,12 +1,12 @@
 class RollingAverage{
 
   public:
-  int rollingLen;
   RollingAverage(int rollLen);
   void newData(float data);
   float getData();
   
   private: 
+  int rollingLen;
   float *rawData;
   int dataIndex;
   int startFlag;

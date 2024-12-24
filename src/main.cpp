@@ -3,21 +3,23 @@
 //use ALLCAPS for definitions
 //and utilize ifdefs
 
-#include <WiFi.h>
+//#include <WiFi.h>
 //#include <BluetoothSerial.h>
 #include <Arduino.h>
-//#include <Wire.h>
+#include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <RollingAverage.h>
+#include <Quaternion.h>
 #include <ESP32Servo.h>
+#include <math.h>
 #define BARO
 //#define MPU6050
-//#define BNO055
+#define BNO055
 #define groundTesting
 //#define SIMULATE
-#define SERVO1_PIN 1;
+#define SERVO1_PIN 4
 #ifdef BARO
-#include <Adafruit_BMPXX.h>
+#include <Adafruit_BMP3XX.h>
 #define BMP_SCK 18
 #define BMP_MISO 19
 #define BMP_MOSI 23
@@ -34,8 +36,7 @@ Adafruit_BMP3XX bmp;
 #ifdef BNO055
 #include <Adafruit_BNO055.h>
 #define BNO_ADDRESS 0x28
-#define BNO_SDA 13
-#define BNO_SCL 12
+
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 
@@ -60,10 +61,14 @@ float zenith;// in radians
 //ground references for pressure function to work
 float groundTemperature, groundPressure, altitude; //alt in meters
 
+float totalDragCoef;
 float angularRocketDragCoef = 0;//area included
 float rocketDragCoef = 0;//
 float angularAirBreakDragCoef = 0;
 
+float yaw;
+float pitch;
+float roll;
 
 unsigned long lastT;
 int deltaT;
@@ -190,20 +195,16 @@ void baroData(void){
 
   pressure = (bmp.pressure / 100.0);//hPa
   pressureRoll.newData(pressure);
-  checkMax(pressureRoll.getData(),&pressureMax);
 }
 
 
 
 void altitudeProcessing(){
-  deltaT = micros()-lastT;
-  lastT = micros();
+  
   altitude = pressToAlt(pressureRoll.getData());
   altitudeVRoll.newData((altitude - lastAltitude)/deltaT*1000000);
   altitudeV = altitudeVRoll.getData();
 
-  checkMax(altitude,&altitudeMax);//fluff
-  checkMax(altitudeVRoll.getData(),&altitudeVMax);
 
 }
 #endif
@@ -234,13 +235,12 @@ void logData(){
 
 
 }
-int flightState = 1;//state of the rocket's control
+int flightState = 0;//state of the rocket's control
 int flightStateAdvancementTrigger = 0;//counts number of times state switching event occurs
 int flighti = 0;//something advanced
 void setup() {
   Serial.begin(115200);
   servo1.attach(SERVO1_PIN);
-
   // Disable Wi-Fi
   //WiFi.mode(WIFI_OFF);
   //WiFi.disconnect(true);
@@ -249,7 +249,6 @@ void setup() {
   Serial.println("Start Setup");
   delay(1000);
   #ifdef BNO055
-  IMU_BNO055setup();
   #endif
   #ifdef MPU6050
   IMUsetup();
@@ -257,27 +256,34 @@ void setup() {
   #ifdef BARO
   baroSetup();
   #endif
-  delay(1000);
-  #ifdef BARO
-  for (int i = 0; i < 60; i++){
-    baroData();//fill up the rolling averages
-  }
-  groundTemperature = temperatureRoll.getData();
-  groundPressure = pressureRoll.getData();
-  #endif
   for (int i = 0; i < 180; i++){
-    Serial.println("write to servo");
     servo1.write(i);
     delay(10);
   }
   for (int i = 180; i > 0; i--){
-    Serial.println("write to servo");
     servo1.write(i);
     delay(10);
+  }  
+  IMU_BNO055setup();
+
+  #ifdef BARO
+  for (int i = 0; i < 120; i++){
+    baroData();//fill up the rolling averages
+    delay(10);
   }
+  groundTemperature = temperatureRoll.getData();
+  groundPressure = pressureRoll.getData();
+  #endif
+  
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  yaw = euler.x();
+  pitch = euler.y();
+  roll = euler.z();
+
   Serial.println("start");
+
   lastT = micros();
-  //lastAltitude = pressToAlt(pressureRoll.getData());
+  lastAltitude = pressToAlt(pressureRoll.getData());
   }
 int servoAngle;//servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
 bool solenoidState;//state of the solenoid 0 for unreleased 1 to release
@@ -301,8 +307,67 @@ float inverseApogee() { // Binary Search
   }
   return mid/searchRangeH*DRAG_FLAP_RANGE;//returns angle for ddrag flaps to occupy
 }
-void loop() {
+#ifdef BNO055
 
+Quaternion orientation;
+Quaternion gravity;
+float degreesToRadians(float angle){
+  return angle/180*PI;
+}
+float radiansToDegrees(float angle){
+  return angle*180/PI;
+}
+
+void IMUdata(){
+ // Possible vector values can be:
+  // - VECTOR_ACCELEROMETER - m/s^2
+  // - VECTOR_MAGNETOMETER  - uT
+  // - VECTOR_GYROSCOPE     - rad/s
+  // - VECTOR_EULER         - degrees
+  // - VECTOR_LIN4EARACCEL   - m/s^2
+  // - VECTOR_GRAVITY       - m/s^2
+  imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+
+  /* Display the floating point data */
+  yaw += gyro.x()*deltaT/1000000;
+  pitch += gyro.y()*deltaT/1000000;
+  roll += gyro.z()*deltaT/1000000;
+  orientation.gyro(degreesToRadians(yaw),degreesToRadians(pitch),degreesToRadians(roll));
+  //imu::Quaternion quat = bno.getQuat();
+  //Serial.print(orientation.w);Serial.print(", ");
+  //Serial.print(orientation.i);Serial.print(", ");
+  //Serial.print(orientation.j);Serial.print(", ");
+  //Serial.print(orientation.k);//Serial.print();
+
+  //Serial.print(euler.x());Serial.print(", ");
+  //Serial.print(euler.y());Serial.print(", ");
+  //Serial.print(euler.z());//Serial.print();
+
+  Serial.println();
+  // bno.getEvent(&BNO);
+  // Serial.print(", ");
+  // Serial.print(BNO.gyro.x);
+  // Serial.print(", ");
+  // Serial.print(BNO.gyro.y);
+  // Serial.print(", ");
+  // Serial.print(BNO.gyro.z);
+  // Serial.println();
+  // Serial.print(BNO.gyro.z);
+  // Serial.println();
+
+  // Quaternion data
+  // imu::Quaternion quat = bno.getQuat();
+  // Serial.print(quat.w()+3);Serial.print(",");
+  // Serial.print(quat.x()+3);Serial.print(",");
+  // Serial.print(quat.y()+3);Serial.print(",");
+  // Serial.print(quat.z()+3);Serial.print(",");
+
+
+}
+#endif
+void loop() {
+  deltaT = micros()-lastT;
+  lastT = micros();
   #ifdef MPU6050
   accelData();
   gyroData();
@@ -315,10 +380,16 @@ void loop() {
   //main control things
   switch(flightState){
     case 0://happy data printing mode
-      Serial.print(altitude/altitudeMax*GRAPH_NORMALIZED_MAX);Serial.print(",");
-      Serial.print(altitudeV/altitudeVMax*GRAPH_NORMALIZED_MAX);Serial.print(",");
-      Serial.print(pressure/pressureMax*GRAPH_NORMALIZED_MAX);Serial.print(",");
-      Serial.println();
+    /*
+      Serial.print(altitude);Serial.print(",");
+
+      Serial.print(altitudeV);Serial.print(",");
+      Serial.print(pressureRoll.getData());Serial.print(",");
+      Serial.print(groundPressure);Serial.print(",");
+      Serial.print(groundTemperature);Serial.print(",");*/
+      IMUdata();
+      //Serial.print(pressure/pressureMax*GRAPH_NORMALIZED_MAX);Serial.print(",");
+      //Serial.println();
       break;
     case 1://on the launch pad waiting to be ignited
       //do main rocket logic hereVVV
@@ -360,18 +431,20 @@ void loop() {
       flighti ++;
       //do main rocket logic here VVV
       //Vi^2 = 2aD
-      float totalDragCoef = verticalAcceleration / pow(altitudeV,2);
-
+      totalDragCoef = verticalAcceleration / pow(altitudeV,2);
+      if (altitude > DESIRED_APOGEE){
+        servoAngle = 90;
+      }
       if  (flighti < 100){//servos at 0
-      Serial.println("Retract Servos Completely");
+      servoAngle = 0;
       rocketDragCoefRoll.newData(totalDragCoef);
       }
       else if (flighti < 200){//servos at 90 
-      Serial.println("Fully Extend Servos");
+      servoAngle = 90;
       angularAirBreakDragCoefRoll.newData(totalDragCoef - rocketDragCoefRoll.getData());
       }
       else{
-        Serial.println(inverseApogee());
+        servoAngle = inverseApogee();
         
       }
       
@@ -414,31 +487,7 @@ void loop() {
       break;
     }
   servo1.write(servoAngle);
-  // sensors_event_t BNO;
-  // bno.getEvent(&BNO);
-  // Serial.print(", ");
-  // Serial.print(BNO.gyro.x);
-  // Serial.print(", ");
-  // Serial.print(BNO.gyro.y);
-  // Serial.print(", ");
-  // Serial.print(BNO.gyro.z);
-  // Serial.println();
-  // Serial.print(BNO.gyro.z);
-  // Serial.println();
-
-  // Quaternion data
-  // imu::Quaternion quat = bno.getQuat();
-  // Serial.print("\t");
-  // Serial.print(quat.w(), 4);
-  // Serial.print("\t");
-  // Serial.print(quat.x(), 4);
-  // Serial.print("\t");
-  // Serial.print(quat.y(), 4);
-  // Serial.print("\t");
-  // Serial.print(quat.z(), 4);
-  // Serial.print("\n");
-
-  // lastAltitude = altitude;
+  lastAltitude = altitude;
    //Serial.print(",accelX:");
    //Serial.print(groundPressure);
   // Serial.print(", accelY:");
