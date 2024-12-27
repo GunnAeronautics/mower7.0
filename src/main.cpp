@@ -42,13 +42,13 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 
 #endif
 
-#define GRAVITY 9.81//m/s
+#define GRAVITY 9.81//m/s^2
 #define DESIRED_APOGEE 250//m specified by TARC guidelines
-#define DESIRED_FLIGHT_TIME 45 //seconds
-#define PARACHUTE_DRAG_COEF 0.05//area included
+#define DESIRED_FLIGHT_TIME 45000 //miliseconds
+//#define PARACHUTE_DRAG_COEF 0.05//area included
 #define DRAG_FLAP_RANGE 90// 0 for full retraction, 90 for full extension
-//#define PARACHUTE_TERM_VELOCITY //m/s
-#define GRAPH_NORMALIZED_MAX 1000
+#define PARACHUTE_TERM_VELOCITY 10//m/s
+//#define GRAPH_NORMALIZED_MAX 1000
 
 float GyroX, GyroY,GyroZ;// deg / sec
 float AccX,AccY,AccZ;//Gs
@@ -56,7 +56,7 @@ float AccX,AccY,AccZ;//Gs
 float pressure, temperature;//Pa C
 float lastAltitude;
 float altitudeV;// in m/s
-float verticalAcceleration;// in m/s^2
+float verticalAccel;// in m/s^2
 float zenith;// in radians
 //ground references for pressure function to work
 float groundTemperature, groundPressure, altitude; //alt in meters
@@ -72,8 +72,15 @@ float roll;
 
 unsigned long lastT;
 int deltaT;
-int startTimeStamp;// ms
-int timeElapsed;//time elapsed in flight (ms)
+int startTimeStamp = 0;// ms
+int timeElapsed = 0;//time elapsed in flight (ms)
+
+int flightState = 0;//state of the rocket's control
+int flightStateAdvancementTrigger = 0;//counts number of times state switching event occurs
+int flighti = 0;//something advanced
+int servoAngle;//servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
+bool solenoidState;//state of the solenoid 0 for unreleased 1 to release
+
 //webhooktest
 // put function declarations here:
 Servo servo1;//create servo
@@ -85,6 +92,9 @@ RollingAverage altitudeVRoll(60);
 //RollingAverage angularRocketDragCoefRoll;
 RollingAverage rocketDragCoefRoll(40);
 RollingAverage angularAirBreakDragCoefRoll(40);
+
+Quaternion orientation;
+Quaternion angularSpeed;
 
 #ifdef SIMULATE
 float pressureFunction(){//function of pressure to replace sensors
@@ -176,11 +186,7 @@ void baroSetup(){
 float pressToAlt(float pres){ //returns alt (m) from pressure in hecta pascals and temperature in celsius - FULLY TESTED
   return (float)(((273.0+groundTemperature)/(-.0065))*((pow((pres/groundPressure),((8.314*.0065)/(GRAVITY*.02896))))-1.0)); //https://www.mide.com/air-pressure-at-altitude-calculator, https://en.wikipedia.org/wiki/Barometric_formula 
 }
-
-float altitudeMax = 1;
-float altitudeVMax = 1;
-float pressureMax = 1;
-void baroData(void){
+void baroData(void){//gets barometric data from the sensor
   #ifdef SIMULATE
     temperature = 20;
     pressure = pressureFunction();
@@ -196,48 +202,46 @@ void baroData(void){
   pressure = (bmp.pressure / 100.0);//hPa
   pressureRoll.newData(pressure);
 }
-
-
-
-void altitudeProcessing(){
-  
+void altitudeProcessing(){//takes pressure data and transforms it into altitude and altitude velocity
+  lastAltitude = altitude;
   altitude = pressToAlt(pressureRoll.getData());
   altitudeVRoll.newData((altitude - lastAltitude)/deltaT*1000000);
   altitudeV = altitudeVRoll.getData();
-
-
 }
 #endif
 
-
-void logData(){
-  Serial.print(millis());Serial.print(",");
-  Serial.print(pressure);Serial.print(",");
-  Serial.print(altitude);Serial.print(",");
-  Serial.print(altitudeV);Serial.print(",");
-  Serial.print("magnometer x");Serial.print(",");
-  Serial.print("magnometer y");Serial.print(",");
-  Serial.print("magnometer z");Serial.print(",");
-  Serial.print("accel x");Serial.print(",");
-  Serial.print("accel y");Serial.print(",");
-  Serial.print("accel z");Serial.print(",");
-  Serial.print("gyro x");Serial.print(",");
-  Serial.print("gyro y");Serial.print(",");
-  Serial.print("gyro z");Serial.print(",");
-  Serial.print("gyro z");Serial.print(",");
-  Serial.print("quat w");Serial.print(",");
-  Serial.print("quat x");Serial.print(",");
-  Serial.print("quat y");Serial.print(",");
-  Serial.print("quat z");Serial.print(",");
-  Serial.print("solenoid value");Serial.print(",");
-  Serial.print("flap angle");Serial.print(",");
-  Serial.print("state");Serial.print(",");
+void setupDataLog(){
+    String dataString = (String)groundTemperature +','+
+                        (String)groundPressure +','+
+                        (String)groundPressure +',';
 
 
 }
-int flightState = 0;//state of the rocket's control
-int flightStateAdvancementTrigger = 0;//counts number of times state switching event occurs
-int flighti = 0;//something advanced
+void logData(){
+                        //DATA INPUTS
+    String dataString = (String)timeElapsed + ',' + //rocket flight time
+                        (String)pressure + ',' + //pressure
+                        (String)altitude+ ',' + //alt
+                        (String)altitudeV+ ',' + //velocity - baro derived
+                        (String)verticalAccel + ',' + //accel - imu derived
+                        (String)zenith + ',' + //angle from the vertical
+                        (String)orientation.w +','+ //rocket orientations
+                        (String)orientation.i +','+
+                        (String)orientation.j +','+
+                        (String)orientation.k +','+
+                        //CONTROL
+                        (String)"predictApogee" + ',' + //apogee prediction
+                        (String)servoAngle + ',' + //flap angle
+                        (String)solenoidState + ',' + //solenoid
+                        (String)flightState + ',' + //flightState
+                        //DRAG
+                        (String)totalDragCoef + ',' + //totalDrag
+                        (String)angularRocketDragCoef + ',' + //
+                        (String)rocketDragCoef + ',' +
+                        (String)angularAirBreakDragCoef;
+                        //EXTRA
+}
+
 void setup() {
   Serial.begin(115200);
   servo1.attach(SERVO1_PIN);
@@ -285,8 +289,6 @@ void setup() {
   lastT = micros();
   lastAltitude = pressToAlt(pressureRoll.getData());
   }
-int servoAngle;//servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
-bool solenoidState;//state of the solenoid 0 for unreleased 1 to release
 
 float predictApogee(float alt,float v,float dragCoef){
   return alt + log((dragCoef*v*v/9.81)+1)/(2.0*dragCoef);//copied from mower6.0
@@ -309,39 +311,66 @@ float inverseApogee() { // Binary Search
 }
 #ifdef BNO055
 
-Quaternion orientation;
-Quaternion gravity;
+
 float degreesToRadians(float angle){
   return angle/180*PI;
 }
 float radiansToDegrees(float angle){
   return angle*180/PI;
 }
+float angleBetweenVertical(Quaternion orientation){
+  //Quaternion vertical(0,0,1,0);//some lateral direction
+  Quaternion vertical(0,0,0,1);//Z direction
+  //Quaternion vertical(0,0,0,0);//in the opposite lateral direction to the top
 
+  Quaternion copy = orientation;
+  orientation.mult(vertical);
+  orientation.mult(copy.inverse());
+  return radiansToDegrees(acos(orientation.k/orientation.getLength()));
+  //return orientation
+}
+float verticalAcceleration(Quaternion orientation,  float accelX,float accelY,float accelZ){
+  Quaternion accel(0,accelX,accelY,accelZ);
+  Quaternion copy = orientation;
+  orientation.mult(accel);
+  orientation.mult(copy.inverse());
+  return orientation.k;//I don't know if it's j or something else must check
+}
 void IMUdata(){
  // Possible vector values can be:
   // - VECTOR_ACCELEROMETER - m/s^2
   // - VECTOR_MAGNETOMETER  - uT
   // - VECTOR_GYROSCOPE     - rad/s
   // - VECTOR_EULER         - degrees
-  // - VECTOR_LIN4EARACCEL   - m/s^2
+  // - VECTOR_LINEARACCEL   - m/s^2
   // - VECTOR_GRAVITY       - m/s^2
   imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
-
+  imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Quaternion quat = bno.getQuat();
   /* Display the floating point data */
-  yaw += gyro.x()*deltaT/1000000;
-  pitch += gyro.y()*deltaT/1000000;
-  roll += gyro.z()*deltaT/1000000;
-  orientation.gyro(degreesToRadians(yaw),degreesToRadians(pitch),degreesToRadians(roll));
+  // yaw += gyro.x()*deltaT/1000000;
+  // pitch += gyro.y()*deltaT/1000000;//perpindicular to the ground
+  // roll += gyro.z()*deltaT/1000000;
+  //orientation.gyro(degreesToRadians(yaw),degreesToRadians(pitch),degreesToRadians(roll));
+  //Quaternion orientation(quat.w(),quat.x(),quat.y(),quat.z());
+  angularSpeed.gyro(degreesToRadians(gyro.x()*deltaT/1000000),
+                    degreesToRadians(gyro.y()*deltaT/1000000),
+                    degreesToRadians(gyro.z()*deltaT/1000000));
+  orientation.mult(angularSpeed);
   //imu::Quaternion quat = bno.getQuat();
+  zenith = angleBetweenVertical(orientation);
+  verticalAccel = verticalAcceleration(orientation, accel.x(),accel.y(),accel.z()) - GRAVITY;
+  //Serial.print(zenith);Serial.print(", ");
+  Serial.print(verticalAccel);Serial.print(", ");
   //Serial.print(orientation.w);Serial.print(", ");
   //Serial.print(orientation.i);Serial.print(", ");
   //Serial.print(orientation.j);Serial.print(", ");
-  //Serial.print(orientation.k);//Serial.print();
+  //Serial.print(orientation.k);Serial.print(", ");
 
-  //Serial.print(euler.x());Serial.print(", ");
-  //Serial.print(euler.y());Serial.print(", ");
-  //Serial.print(euler.z());//Serial.print();
+  Serial.print(accel.x());Serial.print(", ");
+  Serial.print(accel.y());Serial.print(", ");
+  Serial.print(accel.z());//Serial.print();
 
   Serial.println();
   // bno.getEvent(&BNO);
@@ -356,7 +385,7 @@ void IMUdata(){
   // Serial.println();
 
   // Quaternion data
-  // imu::Quaternion quat = bno.getQuat();
+  //imu::Quaternion quat = bno.getQuat();
   // Serial.print(quat.w()+3);Serial.print(",");
   // Serial.print(quat.x()+3);Serial.print(",");
   // Serial.print(quat.y()+3);Serial.print(",");
@@ -365,9 +394,16 @@ void IMUdata(){
 
 }
 #endif
+
 void loop() {
   deltaT = micros()-lastT;
   lastT = micros();
+  if (startTimeStamp = 0){
+    timeElapsed = 0;
+  }
+  else{
+  timeElapsed = millis() - startTimeStamp;
+  }
   #ifdef MPU6050
   accelData();
   gyroData();
@@ -376,7 +412,9 @@ void loop() {
   baroData();
   altitudeProcessing();
   #endif
-
+  #ifdef BNO055
+  IMUdata();
+  #endif
   //main control things
   switch(flightState){
     case 0://happy data printing mode
@@ -387,7 +425,6 @@ void loop() {
       Serial.print(pressureRoll.getData());Serial.print(",");
       Serial.print(groundPressure);Serial.print(",");
       Serial.print(groundTemperature);Serial.print(",");*/
-      IMUdata();
       //Serial.print(pressure/pressureMax*GRAPH_NORMALIZED_MAX);Serial.print(",");
       //Serial.println();
       break;
@@ -397,7 +434,7 @@ void loop() {
 
 
       //flight switching code_______________
-      if ((verticalAcceleration > 20)||(altitude > 10)){//tune these thresholds and statements
+      if ((verticalAccel > 20)||(altitude > 10)){//tune these thresholds and statements
         flightStateAdvancementTrigger ++;
         if (flightStateAdvancementTrigger > 3){//tune this thresholds
           flightState ++;
@@ -412,7 +449,7 @@ void loop() {
       break;
     case 2://Accelerating Stage
       //do main rocket logic here VVV
-
+      
       //flight switching code_______________
       if ((verticalAcceleration < 0)||(timeElapsed > 3000)){//tune these thresholds and statements
         flightStateAdvancementTrigger ++;
@@ -429,9 +466,15 @@ void loop() {
       break;
     case 3://Upward freefall
       flighti ++;
+      //VARIABLES
+      //Altitude
+      //Altitude Acceleration
+      //Time Elapsed
+      //Zenith
+      //Vertical Acceleration
       //do main rocket logic here VVV
       //Vi^2 = 2aD
-      totalDragCoef = verticalAcceleration / pow(altitudeV,2);
+      totalDragCoef = verticalAccel / pow(altitudeV,2);
       if (altitude > DESIRED_APOGEE){
         servoAngle = 90;
       }
@@ -467,7 +510,9 @@ void loop() {
       break;
     case 4://decent
       //do main rocket logic here VVV
-
+      if (altitude < (DESIRED_FLIGHT_TIME - timeElapsed) * PARACHUTE_TERM_VELOCITY){
+        solenoidState = 1;
+      }
       //flight switching code_______________
       if (((-1 < altitudeV)&&(altitudeV < 1))||(timeElapsed > 100000)){//tune these thresholds and statements
         flightStateAdvancementTrigger ++;
@@ -487,7 +532,6 @@ void loop() {
       break;
     }
   servo1.write(servoAngle);
-  lastAltitude = altitude;
    //Serial.print(",accelX:");
    //Serial.print(groundPressure);
   // Serial.print(", accelY:");
