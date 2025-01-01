@@ -12,12 +12,18 @@
 #include <Quaternion.h>
 #include <ESP32Servo.h>
 #include <math.h>
+#define DUMMY_ROCKET true//if dummy rocket then no servo or solenoid
+
 #define BARO
 //#define MPU6050
 #define BNO055
-#define groundTesting
+#define SDCARD
+//#define groundTesting
 //#define SIMULATE
 #define SERVO1_PIN 4
+#ifdef SDCARD
+#include <SD_MMC.h>
+#endif
 #ifdef BARO
 #include <Adafruit_BMP3XX.h>
 #define BMP_SCK 18
@@ -80,6 +86,7 @@ int flightStateAdvancementTrigger = 0;//counts number of times state switching e
 int flighti = 0;//something advanced
 int servoAngle;//servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
 bool solenoidState;//state of the solenoid 0 for unreleased 1 to release
+
 
 //webhooktest
 // put function declarations here:
@@ -177,7 +184,93 @@ void gyroData(void){
 
 }
 #endif
+#ifdef SDCARD
+String logFilename;
+String getNewLogFilename() {
+  int fileIndex = 1;
+  String filename;
+  do {
+    filename = "/datalog" + String(fileIndex) + ".csv";
+    fileIndex++;
+  } while (SD_MMC.exists(filename.c_str()));
+  return filename;
+}
+
+void sdSetup(){
+Serial.println("Initializing SD card using SD_MMC...");
+  // Configure SD_MMC to use 1-bit mode
+
+
+  // Attempt to initialize the SD card in 4-bit mode
+  if (!SD_MMC.begin()) {
+    Serial.println("Card Mount Failed");
+    return;
+  }
+/*
+
+  // Check the type of SD card
+  sdcard_type_t cardType = SD_MMC.cardType();
+  if (cardType == CARD_NONE) {
+    Serial.println("No SD card attached");
+    return;
+  }
+  // Print SD card type
+  Serial.print("SD Card Type: ");
+  switch (cardType) {
+    case CARD_MMC:
+      Serial.println("MMC");
+      break;
+    case CARD_SD:
+      Serial.println("SDSC");
+      break;
+    case CARD_SDHC:
+      Serial.println("SDHC");
+      break;
+    default:
+      Serial.println("UNKNOWN");
+  }
+*/
+/*
+  // Print card size in MB
+  uint64_t cardSize = SD_MMC.cardSize() / (1024 * 1024);
+  Serial.printf("Card Size: %llu MB\n", cardSize);
+
+  // Print used and total space
+  uint64_t usedBytes = SD_MMC.usedBytes();
+  uint64_t totalBytes = SD_MMC.totalBytes();
+  Serial.printf("Used Space: %llu MB\n", usedBytes / (1024 * 1024));
+  Serial.printf("Total Space: %llu MB\n", totalBytes / (1024 * 1024));
+*/
+
+  // Generate a new log file name
+  logFilename = getNewLogFilename();
+  Serial.print("New log file created: ");
+  Serial.println(logFilename);
+  // Create the new log file and write a header
+  File file = SD_MMC.open(logFilename.c_str(), FILE_WRITE);
+  if (file) {
+    file.println("time,pressure,altitude,altitudev,verticalAccel,zenith,w,i,j,k,predictapogee,servoAngle,solenoidState,flightState,totalDragCoef,angularDragCoef,rocketDragCoef,angularAirBreakDragCoef");
+    file.close();
+    Serial.println("Log file initialized with header.");
+  } else {
+    Serial.println("Failed to create log file.");
+  }
+
+}
+void writeCSVLine(String data) {
+  File file = SD_MMC.open(logFilename.c_str(), FILE_APPEND);
+  if (file) {
+    file.println(data);
+    file.close();
+    Serial.println("Data written to log file successfully.");
+  } else {
+    Serial.println("Failed to open log file for writing.");
+  }
+}
+
+#endif
 #ifdef BARO
+
 void baroSetup(){
   if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // hardware SPI mode  
     Serial.println("Could not find a valid BMP3 sensor, check wiring!");
@@ -214,6 +307,7 @@ void setupDataLog(){
     String dataString = (String)groundTemperature +','+
                         (String)groundPressure +','+
                         (String)groundPressure +',';
+  writeCSVLine(dataString);
 
 
 }
@@ -240,25 +334,34 @@ void logData(){
                         (String)rocketDragCoef + ',' +
                         (String)angularAirBreakDragCoef;
                         //EXTRA
+  writeCSVLine(dataString);
+
 }
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("Serial Begin");
+
   servo1.attach(SERVO1_PIN);
+  Serial.println("Servo Attached");
+
   // Disable Wi-Fi
   //WiFi.mode(WIFI_OFF);
   //WiFi.disconnect(true);
   // Disable Bluetooth
   //btStop();
-  Serial.println("Start Setup");
   delay(1000);
   #ifdef BNO055
+  IMU_BNO055setup();
+  Serial.println("BNO055 Attached");
+
   #endif
   #ifdef MPU6050
   IMUsetup();
   #endif
   #ifdef BARO
   baroSetup();
+  Serial.println("BMP390 Attached");
   #endif
   for (int i = 0; i < 180; i++){
     servo1.write(i);
@@ -268,7 +371,7 @@ void setup() {
     servo1.write(i);
     delay(10);
   }  
-  IMU_BNO055setup();
+  Serial.println("Servo Test Done");
 
   #ifdef BARO
   for (int i = 0; i < 120; i++){
@@ -277,17 +380,25 @@ void setup() {
   }
   groundTemperature = temperatureRoll.getData();
   groundPressure = pressureRoll.getData();
+  Serial.println("Ground Pressure " + (String)groundPressure);
+  Serial.println("Ground Temperature " + (String)groundTemperature);
+
   #endif
   
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  yaw = euler.x();
-  pitch = euler.y();
-  roll = euler.z();
+  imu::Quaternion quat = bno.getQuat();
+  orientation.w = quat.w();
+  orientation.i = quat.x();
+  orientation.j = quat.y();
+  orientation.k = quat.z();
 
-  Serial.println("start");
-
+  Serial.println("Orientation Initialized");
+  #ifdef SDCARD
+  sdSetup();
+  #endif
   lastT = micros();
   lastAltitude = pressToAlt(pressureRoll.getData());
+  Serial.println("start");
+
   }
 
 float predictApogee(float alt,float v,float dragCoef){
@@ -321,11 +432,16 @@ float radiansToDegrees(float angle){
 float angleBetweenVertical(Quaternion orientation){
   //Quaternion vertical(0,0,1,0);//some lateral direction
   Quaternion vertical(0,0,0,1);//Z direction
+  //angle between Z axis: 0,0,0,1
+  //angle between Y axis: 0,0,1,0
+  //angle between X axis: 0,1,0,0
+  //if flippde then reverse the axis ex: 0,-1,0,04
   //Quaternion vertical(0,0,0,0);//in the opposite lateral direction to the top
 
   Quaternion copy = orientation;
   orientation.mult(vertical);
   orientation.mult(copy.inverse());
+  //angle between vectors formula:
   return radiansToDegrees(acos(orientation.k/orientation.getLength()));
   //return orientation
 }
@@ -334,7 +450,9 @@ float verticalAcceleration(Quaternion orientation,  float accelX,float accelY,fl
   Quaternion copy = orientation;
   orientation.mult(accel);
   orientation.mult(copy.inverse());
-  return orientation.k;//I don't know if it's j or something else must check
+  //return i if x direction is facing top, j if y direction is facing top, and k if z direction is facing top
+  //the values may be reversed if the direction is flipped
+  return orientation.k;
 }
 void IMUdata(){
  // Possible vector values can be:
@@ -346,8 +464,8 @@ void IMUdata(){
   // - VECTOR_GRAVITY       - m/s^2
   imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
   imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  imu::Quaternion quat = bno.getQuat();
+  //imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  //imu::Quaternion quat = bno.getQuat();
   /* Display the floating point data */
   // yaw += gyro.x()*deltaT/1000000;
   // pitch += gyro.y()*deltaT/1000000;//perpindicular to the ground
@@ -362,17 +480,17 @@ void IMUdata(){
   zenith = angleBetweenVertical(orientation);
   verticalAccel = verticalAcceleration(orientation, accel.x(),accel.y(),accel.z()) - GRAVITY;
   //Serial.print(zenith);Serial.print(", ");
-  Serial.print(verticalAccel);Serial.print(", ");
+  //Serial.print(verticalAccel);Serial.print(", ");
   //Serial.print(orientation.w);Serial.print(", ");
   //Serial.print(orientation.i);Serial.print(", ");
   //Serial.print(orientation.j);Serial.print(", ");
   //Serial.print(orientation.k);Serial.print(", ");
 
-  Serial.print(accel.x());Serial.print(", ");
-  Serial.print(accel.y());Serial.print(", ");
-  Serial.print(accel.z());//Serial.print();
+  //Serial.print(accel.x());Serial.print(", ");
+  //Serial.print(accel.y());Serial.print(", ");
+  //Serial.print(accel.z());//Serial.print();
 
-  Serial.println();
+  //Serial.println();
   // bno.getEvent(&BNO);
   // Serial.print(", ");
   // Serial.print(BNO.gyro.x);
@@ -418,6 +536,8 @@ void loop() {
   //main control things
   switch(flightState){
     case 0://happy data printing mode
+      //Serial.print(deltaT);Serial.print(",");
+
     /*
       Serial.print(altitude);Serial.print(",");
 
@@ -451,7 +571,7 @@ void loop() {
       //do main rocket logic here VVV
       
       //flight switching code_______________
-      if ((verticalAcceleration < 0)||(timeElapsed > 3000)){//tune these thresholds and statements
+      if (!DUMMY_ROCKET&&((verticalAcceleration < 0)||(timeElapsed > 3000))){//tune these thresholds and statements
         flightStateAdvancementTrigger ++;
         if (flightStateAdvancementTrigger > 3){//tune this thresholds
           flightState ++;
