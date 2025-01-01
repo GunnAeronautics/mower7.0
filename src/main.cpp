@@ -11,7 +11,7 @@
 #include <RollingAverage.h>
 #include <Quaternion.h>
 #include <ESP32Servo.h>
-#include <math.h>
+#include <math.h>//for inverse trig functions
 #define DUMMY_ROCKET true//if dummy rocket then no servo or solenoid
 
 #define BARO
@@ -324,7 +324,7 @@ void logData(){
                         (String)orientation.j +','+
                         (String)orientation.k +','+
                         //CONTROL
-                        (String)"predictApogee" + ',' + //apogee prediction
+                        (String)predictApogee(altitude,altitudeV,rocketDragCoef) + ',' + //apogee prediction
                         (String)servoAngle + ',' + //flap angle
                         (String)solenoidState + ',' + //solenoid
                         (String)flightState + ',' + //flightState
