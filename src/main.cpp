@@ -16,11 +16,15 @@
 
 #define BARO
 //#define MPU6050
-//#define BNO055
-#define SDCARD
+#define BNO055
+//#define SDCARD
 //#define groundTesting
 //#define SIMULATE
+//#define SERVO
+
+#ifdef SERVO
 #define SERVO1_PIN 4
+#endif
 #define SDA_PIN 21
 #define SCL_PIN 22
 #ifdef SDCARD
@@ -35,12 +39,12 @@
 #endif
 #ifdef BARO
 #include <Adafruit_BMP3XX.h>
-#define BMP390_I2C_ADDRESS 0x77
+//#define BMP390_I2C_ADDRESS 0x77
 //SPI:
-// #define BMP_SCK 18
-// #define BMP_MISO 19
-// #define BMP_MOSI 23
-// #define BMP_CS 5
+#define BMP_SCK 18
+#define BMP_MISO 19
+#define BMP_MOSI 23
+#define BMP_CS 5
 Adafruit_BMP3XX bmp;
 #endif
 
@@ -101,8 +105,9 @@ bool solenoidState;//state of the solenoid 0 for unreleased 1 to release
 
 //webhooktest
 // put function declarations here:
+#ifdef SERVO
 Servo servo1;//create servo
-
+#endif
 RollingAverage pressureRoll(60);
 RollingAverage temperatureRoll(60);
 RollingAverage altitudeVRoll(60);
@@ -298,10 +303,7 @@ void writeCSVLine(String data) {
 
 #endif
 #ifdef BARO
-#define BMP_CS 34
-#define BMP_MOSI 23//SDO
-#define BMP_MISO 19
-#define BMP_SCK 18
+
 void baroSetup(){
   //SPI
   if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // hardware SPI mode  
@@ -364,7 +366,7 @@ void setupDataLog(){
     String dataString = (String)groundTemperature +','+
                         (String)groundPressure +','+
                         (String)groundPressure +',';
-  writeCSVLine(dataString);
+  //writeCSVLine(dataString);
 
 
 }
@@ -392,45 +394,19 @@ void logData(){
                         (String)rocketDragCoef + ',' +
                         (String)angularAirBreakDragCoef;
                         //EXTRA
-  writeCSVLine(dataString);
+  //writeCSVLine(dataString);
 
 }
-void scanI2C() {
-  Serial.println("Scanning I2C bus...");
-  byte error, address;
-  int devices = 0;
 
-  for (address = 1; address < 127; address++) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-
-    if (error == 0) {
-      Serial.print("I2C device found at address 0x");
-      if (address < 16) Serial.print("0");
-      Serial.print(address, HEX);
-      Serial.println(" !");
-      devices++;
-    } else if (error == 4) {
-      Serial.print("Unknown error at address 0x");
-      if (address < 16) Serial.print("0");
-      Serial.println(address, HEX);
-    }
-  }
-
-  if (devices == 0) {
-    Serial.println("No I2C devices found\n");
-  } else {
-    Serial.println("Scan complete\n");
-  }
-}
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Serial Begin");
 
+  #ifdef SERVO
   servo1.attach(SERVO1_PIN);
   Serial.println("Servo Attached");
-
+  #endif
   // Disable Wi-Fi
   //WiFi.mode(WIFI_OFF);
   //WiFi.disconnect(true);
@@ -442,7 +418,6 @@ void setup() {
   #ifdef MPU6050
   IMUsetup();
   #endif
-  scanI2C();
   #ifdef BARO
   baroSetup();
   Serial.println("BMP390 Attached");
@@ -454,6 +429,7 @@ void setup() {
   delay(500);
 
   #endif
+  #ifdef SERVO
   for (int i = 0; i < 180; i++){
     servo1.write(i);
     delay(10);
@@ -463,7 +439,7 @@ void setup() {
     delay(10);
   }  
   Serial.println("Servo Test Done");
-
+  #endif
   #ifdef BARO
   for (int i = 0; i < 120; i++){
     baroData();//fill up the rolling averages
@@ -528,6 +504,16 @@ float verticalAcceleration(Quaternion orientation,  float accelX,float accelY,fl
   //the values may be reversed if the direction is flipped
   return orientation.k;
 }
+float magAngle(Quaternion orientation,  float magX,float magY,float magZ){
+  Quaternion mag(0,magX,magY,magZ);
+  Quaternion copy = orientation;
+  orientation.mult(mag);
+  orientation.mult(copy.inverse());
+  //return i if x direction is facing top, j if y direction is facing top, and k if z direction is facing top
+  //the values may be reversed if the direction is flipped
+  return radiansToDegrees(atan(orientation.i/orientation.j));
+}
+float trueAngle;
 void IMUdata(){
  // Possible vector values can be:
   // - VECTOR_ACCELEROMETER - m/s^2
@@ -538,6 +524,8 @@ void IMUdata(){
   // - VECTOR_GRAVITY       - m/s^2
   imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
   imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+  imu::Vector<3> mag = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
+
   //imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   //imu::Quaternion quat = bno.getQuat();
   /* Display the floating point data */
@@ -553,8 +541,11 @@ void IMUdata(){
   //imu::Quaternion quat = bno.getQuat();
   zenith = angleBetweenVertical(orientation);
   verticalAccel = verticalAcceleration(orientation, accel.x(),accel.y(),accel.z()) - GRAVITY;
+  trueAngle = magAngle(orientation,mag.x(),mag.y(),mag.z());
   Serial.print(zenith);Serial.print(", ");
   Serial.print(verticalAccel);Serial.print(", ");
+  Serial.print(trueAngle);Serial.print(", ");
+
   //Serial.print(orientation.w);Serial.print(", ");
   //Serial.print(orientation.i);Serial.print(", ");
   //Serial.print(orientation.j);Serial.print(", ");
@@ -725,7 +716,9 @@ void loop() {
       //do whatever u want here
       break;
     }
+  #ifdef SERVO
   servo1.write(servoAngle);
+  #endif
    //Serial.print(",accelX:");
    //Serial.print(groundPressure);
   // Serial.print(", accelY:");
