@@ -16,20 +16,31 @@
 
 #define BARO
 //#define MPU6050
-#define BNO055
+//#define BNO055
 #define SDCARD
 //#define groundTesting
 //#define SIMULATE
 #define SERVO1_PIN 4
+#define SDA_PIN 21
+#define SCL_PIN 22
 #ifdef SDCARD
+#include <FS.h>
+
 #include <SD_MMC.h>
+#define SD_CL  14
+#define SD_CMD  15
+#define SD_D0   2
+#define SD_D1   4
+
 #endif
 #ifdef BARO
 #include <Adafruit_BMP3XX.h>
-#define BMP_SCK 18
-#define BMP_MISO 19
-#define BMP_MOSI 23
-#define BMP_CS 5
+#define BMP390_I2C_ADDRESS 0x77
+//SPI:
+// #define BMP_SCK 18
+// #define BMP_MISO 19
+// #define BMP_MOSI 23
+// #define BMP_CS 5
 Adafruit_BMP3XX bmp;
 #endif
 
@@ -200,12 +211,28 @@ void sdSetup(){
 Serial.println("Initializing SD card using SD_MMC...");
   // Configure SD_MMC to use 1-bit mode
 
+  // Configure SD_MMC to use 1-bit mode
+  
+
+  Serial.println("Pins Setup");
+  //pinMode(SD_CL, INPUT_PULLUP);
+
+  //pinMode(SD_CMD, INPUT_PULLUP);
+  //pinMode(SD_D0, INPUT_PULLUP);
 
   // Attempt to initialize the SD card in 4-bit mode
-  if (!SD_MMC.begin()) {
+  if (!SD_MMC.begin("/sdcard", true)) {
     Serial.println("Card Mount Failed");
     return;
   }
+
+  uint8_t cardType = SD_MMC.cardType();
+
+  if (cardType == CARD_NONE) {
+    Serial.println("No SD card attached");
+    return;
+  }
+
 /*
 
   // Check the type of SD card
@@ -241,6 +268,7 @@ Serial.println("Initializing SD card using SD_MMC...");
   Serial.printf("Used Space: %llu MB\n", usedBytes / (1024 * 1024));
   Serial.printf("Total Space: %llu MB\n", totalBytes / (1024 * 1024));
 */
+  Serial.println("SD Card initialized.");
 
   // Generate a new log file name
   logFilename = getNewLogFilename();
@@ -270,11 +298,21 @@ void writeCSVLine(String data) {
 
 #endif
 #ifdef BARO
-
+#define BMP_CS 34
+#define BMP_MOSI 23//SDO
+#define BMP_MISO 19
+#define BMP_SCK 18
 void baroSetup(){
+  //SPI
   if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // hardware SPI mode  
     Serial.println("Could not find a valid BMP3 sensor, check wiring!");
   }
+  //I2C
+  // if (!bmp.begin_I2C(0x77)) {
+  //       Serial.println("Could not find a valid BMP390 sensor, check wiring!");
+  //       while (1);
+  //   }
+
 }
 float pressToAlt(float pres){ //returns alt (m) from pressure in hecta pascals and temperature in celsius - FULLY TESTED
   return (float)(((273.0+groundTemperature)/(-.0065))*((pow((pres/groundPressure),((8.314*.0065)/(GRAVITY*.02896))))-1.0)); //https://www.mide.com/air-pressure-at-altitude-calculator, https://en.wikipedia.org/wiki/Barometric_formula 
@@ -289,6 +327,7 @@ void baroData(void){//gets barometric data from the sensor
     Serial.println("BMP390 Failed to perform reading :(");
     return;
   }
+  
   temperature = bmp.temperature;//C
   temperatureRoll.newData(temperature);
 
@@ -302,7 +341,25 @@ void altitudeProcessing(){//takes pressure data and transforms it into altitude 
   altitudeV = altitudeVRoll.getData();
 }
 #endif
+float predictApogee(float alt,float v,float dragCoef){
+  return alt + log((dragCoef*v*v/9.81)+1)/(2.0*dragCoef);//copied from mower6.0
+}
+float inverseApogee() { // Binary Search
+  float searchRangeH = angularAirBreakDragCoefRoll.getData();
+  float searchRangeL = 0;//SEARCH RANGE IS 0<m<20
+  float mid;//required drag coef from the air breaks
+  for (int i = 0; i < 10; i++) {
+    mid = (searchRangeL + searchRangeH) / 2.0;
+    float prediction = predictApogee(altitude, altitudeV, mid + rocketDragCoefRoll.getData());
 
+    if (prediction < DESIRED_APOGEE) { // to the left of desired
+      searchRangeH = mid;
+    } else { //if (prediction > DESIRED_APOGEE) {
+      searchRangeL = mid;
+    }
+  }
+  return mid/searchRangeH*DRAG_FLAP_RANGE;//returns angle for ddrag flaps to occupy
+}
 void setupDataLog(){
     String dataString = (String)groundTemperature +','+
                         (String)groundPressure +','+
@@ -311,6 +368,7 @@ void setupDataLog(){
 
 
 }
+
 void logData(){
                         //DATA INPUTS
     String dataString = (String)timeElapsed + ',' + //rocket flight time
@@ -337,6 +395,34 @@ void logData(){
   writeCSVLine(dataString);
 
 }
+void scanI2C() {
+  Serial.println("Scanning I2C bus...");
+  byte error, address;
+  int devices = 0;
+
+  for (address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+
+    if (error == 0) {
+      Serial.print("I2C device found at address 0x");
+      if (address < 16) Serial.print("0");
+      Serial.print(address, HEX);
+      Serial.println(" !");
+      devices++;
+    } else if (error == 4) {
+      Serial.print("Unknown error at address 0x");
+      if (address < 16) Serial.print("0");
+      Serial.println(address, HEX);
+    }
+  }
+
+  if (devices == 0) {
+    Serial.println("No I2C devices found\n");
+  } else {
+    Serial.println("Scan complete\n");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -351,17 +437,22 @@ void setup() {
   // Disable Bluetooth
   //btStop();
   delay(1000);
-  #ifdef BNO055
-  IMU_BNO055setup();
-  Serial.println("BNO055 Attached");
+  Wire.begin(SDA_PIN, SCL_PIN);
 
-  #endif
   #ifdef MPU6050
   IMUsetup();
   #endif
+  scanI2C();
   #ifdef BARO
   baroSetup();
   Serial.println("BMP390 Attached");
+  #endif
+
+  #ifdef BNO055
+  IMU_BNO055setup();
+  Serial.println("BNO055 Attached");
+  delay(500);
+
   #endif
   for (int i = 0; i < 180; i++){
     servo1.write(i);
@@ -382,9 +473,10 @@ void setup() {
   groundPressure = pressureRoll.getData();
   Serial.println("Ground Pressure " + (String)groundPressure);
   Serial.println("Ground Temperature " + (String)groundTemperature);
+  lastAltitude = pressToAlt(pressureRoll.getData());
 
   #endif
-  
+  #ifdef BNO055
   imu::Quaternion quat = bno.getQuat();
   orientation.w = quat.w();
   orientation.i = quat.x();
@@ -392,34 +484,16 @@ void setup() {
   orientation.k = quat.z();
 
   Serial.println("Orientation Initialized");
+  #endif
   #ifdef SDCARD
   sdSetup();
   #endif
   lastT = micros();
-  lastAltitude = pressToAlt(pressureRoll.getData());
   Serial.println("start");
 
   }
 
-float predictApogee(float alt,float v,float dragCoef){
-  return alt + log((dragCoef*v*v/9.81)+1)/(2.0*dragCoef);//copied from mower6.0
-}
-float inverseApogee() { // Binary Search
-  float searchRangeH = angularAirBreakDragCoefRoll.getData();
-  float searchRangeL = 0;//SEARCH RANGE IS 0<m<20
-  float mid;//required drag coef from the air breaks
-  for (int i = 0; i < 10; i++) {
-    mid = (searchRangeL + searchRangeH) / 2.0;
-    float prediction = predictApogee(altitude, altitudeV, mid + rocketDragCoefRoll.getData());
 
-    if (prediction < DESIRED_APOGEE) { // to the left of desired
-      searchRangeH = mid;
-    } else { //if (prediction > DESIRED_APOGEE) {
-      searchRangeL = mid;
-    }
-  }
-  return mid/searchRangeH*DRAG_FLAP_RANGE;//returns angle for ddrag flaps to occupy
-}
 #ifdef BNO055
 
 
@@ -479,8 +553,8 @@ void IMUdata(){
   //imu::Quaternion quat = bno.getQuat();
   zenith = angleBetweenVertical(orientation);
   verticalAccel = verticalAcceleration(orientation, accel.x(),accel.y(),accel.z()) - GRAVITY;
-  //Serial.print(zenith);Serial.print(", ");
-  //Serial.print(verticalAccel);Serial.print(", ");
+  Serial.print(zenith);Serial.print(", ");
+  Serial.print(verticalAccel);Serial.print(", ");
   //Serial.print(orientation.w);Serial.print(", ");
   //Serial.print(orientation.i);Serial.print(", ");
   //Serial.print(orientation.j);Serial.print(", ");
@@ -500,7 +574,7 @@ void IMUdata(){
   // Serial.print(BNO.gyro.z);
   // Serial.println();
   // Serial.print(BNO.gyro.z);
-  // Serial.println();
+  Serial.println();
 
   // Quaternion data
   //imu::Quaternion quat = bno.getQuat();
@@ -571,7 +645,7 @@ void loop() {
       //do main rocket logic here VVV
       
       //flight switching code_______________
-      if (!DUMMY_ROCKET&&((verticalAcceleration < 0)||(timeElapsed > 3000))){//tune these thresholds and statements
+      if (!DUMMY_ROCKET&&((verticalAccel < 0)||(timeElapsed > 3000))){//tune these thresholds and statements
         flightStateAdvancementTrigger ++;
         if (flightStateAdvancementTrigger > 3){//tune this thresholds
           flightState ++;
