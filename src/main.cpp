@@ -22,6 +22,7 @@
 // #define SIMULATE
 // #define SERVO
 
+#define PREC 6//# decimals
 #ifdef SERVO
 #define SERVO1_PIN 4
 #endif
@@ -61,7 +62,7 @@ Adafruit_BMP3XX bmp;
 Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 
 #endif
-
+char buffer[20]; 
 #define GRAVITY 9.81              // m/s^2
 #define DESIRED_APOGEE 250        // m specified by TARC guidelines
 #define DESIRED_FLIGHT_TIME 45000 // miliseconds
@@ -72,12 +73,14 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 
 float GyroX, GyroY, GyroZ; // deg / sec
 float AccX, AccY, AccZ;    // Gs
+float MagX, MagY, MagZ;    // Gs
 
 float pressure, temperature; // Pa C
 float lastAltitude;
 float altitudeV;     // in m/s
 float verticalAccel; // in m/s^2
 float zenith;        // in radians
+
 // ground references for pressure function to work
 float groundTemperature, groundPressure, altitude; // alt in meters
 
@@ -144,6 +147,7 @@ void checkMax(float newData, float *maxData)
     *maxData = newData;
   }
 }
+
 #ifdef MPU6050
 void IMUsetup()
 {
@@ -255,6 +259,7 @@ void sdSetup()
 
   logFilename = getNewLogFilename();
   Serial.println(logFilename);
+  //writeCSVLine(SD, logFilename.c_str(), "Time, Baro");
 }
 
 // appendFile(SD, "/hello.txt", "World!\n");
@@ -362,26 +367,27 @@ void logData()
 {
   Serial.println("Logging Data");
   // DATA INPUTS
-  String dataString = (String)timeElapsed + ',' +   // rocket flight time
-                      (String)pressure + ',' +      // pressure
-                      (String)altitude + ',' +      // alt
-                      (String)altitudeV + ',' +     // velocity - baro derived
-                      (String)verticalAccel + ',' + // accel - imu derived
-                      (String)zenith + ',' +        // angle from the vertical
-                      (String)orientation.w + ',' + // rocket orientations
-                      (String)orientation.i + ',' +
-                      (String)orientation.j + ',' +
-                      (String)orientation.k + ',' +
-                      // CONTROL
-                      (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
-                      (String)servoAngle + ',' +                                         // flap angle
-                      (String)solenoidState + ',' +                                      // solenoid
+  String dataString = String(timeElapsed,5) + ',' +   // rocket flight time
+                      String(pressure,5) + ',' +      // pressure
+                      String(altitude,5) + ',' +      // alt
+                      String(altitudeV,5) + ',' +     // velocity - baro derived
+                      String(verticalAccel,5) + ',' + // accel - imu derived
+                      String(zenith,5) + ',' +        // angle from the vertical
+                      String(orientation.w,5) + ',' + // rocket orientations
+                      String(orientation.i,5) + ',' +
+                      String(orientation.j,5) + ',' +
+                      String(orientation.k,5) + ',' +
+                      //String()
+                      // // CONTROL
+                      // (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
+                      // (String)servoAngle + ',' +                                         // flap angle
+                      // (String)solenoidState + ',' +                                      // solenoid
                       (String)flightState + ',' +                                        // flightState
                       // DRAG
-                      (String)totalDragCoef + ',' +         // totalDrag
-                      (String)angularRocketDragCoef + ',' + //
-                      (String)rocketDragCoef + ',' +
-                      (String)angularAirBreakDragCoef +
+                      // (String)totalDragCoef + ',' +         // totalDrag
+                      // (String)angularRocketDragCoef + ',' + //
+                      // (String)rocketDragCoef + ',' +
+                      // (String)angularAirBreakDragCoef +
                       "\n";
   // EXTRA
   writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
@@ -440,6 +446,7 @@ void setup()
   }
   groundTemperature = temperatureRoll.getData();
   groundPressure = pressureRoll.getData();
+
   Serial.println("Ground Pressure " + (String)groundPressure);
   Serial.println("Ground Temperature " + (String)groundTemperature);
   lastAltitude = pressToAlt(pressureRoll.getData());
