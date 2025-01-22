@@ -22,7 +22,7 @@
 // #define SIMULATE
 // #define SERVO
 
-#define PREC 6//# decimals
+#define DATAPRECISION 6// decimals
 #ifdef SERVO
 #define SERVO1_PIN 4
 #endif
@@ -32,9 +32,9 @@
 #ifdef SDCARD
 #include <FS.h>
 #include <SD.h>
-#define SD_SCK 14
-#define SD_MISO 15
-#define SD_MOSI 2
+#define SD_SCK 18
+#define SD_MISO 19
+#define SD_MOSI 23
 #define SD_CS 4
 #endif
 
@@ -42,9 +42,9 @@
 #include <Adafruit_BMP3XX.h>
 // #define BMP390_I2C_ADDRESS 0x77
 // SPI:
-#define BMP_SCK 18
-#define BMP_MISO 19
-#define BMP_MOSI 23
+#define BMP_SCK 16
+#define BMP_MISO 17
+#define BMP_MOSI 15
 #define BMP_CS 5
 Adafruit_BMP3XX bmp;
 #endif
@@ -103,7 +103,10 @@ int flightStateAdvancementTrigger = 0; // counts number of times state switching
 int flighti = 0;                       // something advanced
 int servoAngle;                        // servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
 bool solenoidState;                    // state of the solenoid 0 for unreleased 1 to release
-
+float bnoW;
+float bnoI;
+float bnoJ;
+float bnoK;
 // webhooktest
 //  put function declarations here:
 #ifdef SERVO
@@ -119,7 +122,8 @@ RollingAverage angularAirBreakDragCoefRoll(40);
 
 Quaternion orientation;
 Quaternion angularSpeed;
-
+SPIClass hspi(HSPI);
+SPIClass vspi(VSPI);
 #ifdef SIMULATE
 float pressureFunction()
 { // function of pressure to replace sensors
@@ -223,7 +227,7 @@ String getNewLogFilename()
 
 void sdSetup()
 {
-  if (!SD.begin(5))
+  if (!SD.begin(4, hspi))
   {
     Serial.println("Card Mount Failed");
     return;
@@ -265,7 +269,7 @@ void sdSetup()
 // appendFile(SD, "/hello.txt", "World!\n");
 void writeCSVLine(fs::FS &fs, const char *path, const char *message)
 {
-  Serial.printf("Appending to file: %s\n", path);
+  //Serial.printf("Appending to file: %s\n", path);
   File file = fs.open(path, FILE_APPEND);
   if (!file)
   {
@@ -274,7 +278,7 @@ void writeCSVLine(fs::FS &fs, const char *path, const char *message)
   }
   if (file.print(message))
   {
-    Serial.println("Message appended");
+    //Serial.println("Message appended");
   }
   else
   {
@@ -289,7 +293,7 @@ void writeCSVLine(fs::FS &fs, const char *path, const char *message)
 void baroSetup()
 {
   // SPI
-  if (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI))
+  while (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI))
   { // hardware SPI mode
     Serial.println("Could not find a valid BMP3 sensor, check wiring!");
   }
@@ -365,18 +369,29 @@ void setupDataLog()
 
 void logData()
 {
-  Serial.println("Logging Data");
+  //Serial.println("Logging Data");
   // DATA INPUTS
-  String dataString = String(timeElapsed,5) + ',' +   // rocket flight time
-                      String(pressure,5) + ',' +      // pressure
-                      String(altitude,5) + ',' +      // alt
-                      String(altitudeV,5) + ',' +     // velocity - baro derived
-                      String(verticalAccel,5) + ',' + // accel - imu derived
-                      String(zenith,5) + ',' +        // angle from the vertical
-                      String(orientation.w,5) + ',' + // rocket orientations
-                      String(orientation.i,5) + ',' +
-                      String(orientation.j,5) + ',' +
-                      String(orientation.k,5) + ',' +
+  String dataString = String(timeElapsed) + ',' +   // rocket flight time
+                      String(pressure,DATAPRECISION) + ',' +      // pressure
+                      String(altitude,DATAPRECISION) + ',' +      // alt
+                      String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
+                      String(verticalAccel,DATAPRECISION) + ',' + // accel - imu derived
+                      String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
+                      String(orientation.w,DATAPRECISION) + ',' + // rocket orientations
+                      String(orientation.i,DATAPRECISION) + ',' +
+                      String(orientation.j,DATAPRECISION) + ',' +
+                      String(orientation.k,DATAPRECISION) + ',' +
+                      String(bnoW,DATAPRECISION) + ',' +
+                      String(bnoI,DATAPRECISION) + ',' +
+                      String(bnoJ,DATAPRECISION) + ',' +
+                      String(bnoK,DATAPRECISION) + ',' +
+                      String(MagX,DATAPRECISION) + ',' +
+                      String(MagY,DATAPRECISION) + ',' +
+                      String(MagZ,DATAPRECISION) + ',' +
+                      String(AccX,DATAPRECISION) + ',' +
+                      String(AccY,DATAPRECISION) + ',' +
+                      String(AccZ,DATAPRECISION) + ',' +
+
                       //String()
                       // // CONTROL
                       // (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
@@ -391,14 +406,14 @@ void logData()
                       "\n";
   // EXTRA
   writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
-  Serial.println(dataString);
+  Serial.print(dataString);
 }
 
 void setup()
 {
   Serial.begin(115200);
   Serial.println("Serial Begin");
-
+  hspi.begin(SD_SCK,SD_MISO,SD_MOSI,SD_CS);
 #ifdef SERVO
   servo1.attach(SERVO1_PIN);
   Serial.println("Servo Attached");
@@ -417,6 +432,11 @@ void setup()
 #ifdef BARO
   baroSetup();
   Serial.println("BMP390 Attached");
+  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp.setOutputDataRate(BMP3_ODR_100_HZ);
+
 #endif
 
 #ifdef BNO055
@@ -463,6 +483,7 @@ void setup()
 #endif
 #ifdef SDCARD
   sdSetup();
+  writeCSVLine(SD, logFilename.c_str(), "Time Elapsed, Pressure \n");
 #endif
   lastT = micros();
   Serial.println("start");
@@ -516,6 +537,8 @@ float magAngle(Quaternion orientation, float magX, float magY, float magZ)
   return radiansToDegrees(atan(orientation.i / orientation.j));
 }
 float trueAngle;
+
+
 void IMUdata()
 {
   // Possible vector values can be:
@@ -530,7 +553,7 @@ void IMUdata()
   imu::Vector<3> mag = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
 
   // imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  // imu::Quaternion quat = bno.getQuat();
+  imu::Quaternion quat = bno.getQuat();
   /* Display the floating point data */
   // yaw += gyro.x()*deltaT/1000000;
   // pitch += gyro.y()*deltaT/1000000;//perpindicular to the ground
@@ -544,13 +567,24 @@ void IMUdata()
   // imu::Quaternion quat = bno.getQuat();
   zenith = angleBetweenVertical(orientation);
   verticalAccel = verticalAcceleration(orientation, accel.x(), accel.y(), accel.z()) - GRAVITY;
-  trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
-  Serial.print(zenith);
-  Serial.print(", ");
-  Serial.print(verticalAccel);
-  Serial.print(", ");
-  Serial.print(trueAngle);
-  Serial.print(", ");
+  //trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
+  bnoW = quat.w();
+  bnoI = quat.x();
+  bnoJ = quat.y();
+  bnoK = quat.z();
+  MagX = mag.x();
+  MagY = mag.y();
+  MagZ = mag.z();
+  AccX = accel.x();
+  AccY = accel.y();
+  AccZ = accel.z();
+
+  // Serial.print(zenith);
+  // Serial.print(", ");
+  // Serial.print(verticalAccel);
+  // Serial.print(", ");
+  // Serial.print(trueAngle);
+  // Serial.print(", ");
 
   // Serial.print(orientation.w);Serial.print(", ");
   // Serial.print(orientation.i);Serial.print(", ");
@@ -571,7 +605,7 @@ void IMUdata()
   //  Serial.print(BNO.gyro.z);
   //  Serial.println();
   //  Serial.print(BNO.gyro.z);
-  Serial.println();
+  //Serial.println();
 
   // Quaternion data
   // imu::Quaternion quat = bno.getQuat();
