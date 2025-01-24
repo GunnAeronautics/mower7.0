@@ -12,7 +12,7 @@ class Quaternion{
     
     Quaternion(float w, float i, float j, float k);
     Quaternion();
-    
+    void setQuat(float w, float i, float j, float k);
     void normalize(float tolerance = 0.0001);
     void normto(float length, float tolerance = 0.0001); // error for some reason??
     void fromAngleVec(float angle, float heading, float elevation);

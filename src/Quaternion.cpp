@@ -20,7 +20,12 @@ Quaternion::Quaternion(){
   j = 0.0;
   k = 0.0;
 }
-
+void Quaternion::setQuat(float w, float i, float j, float k){
+  this->w = w;
+  this->i = i;
+  this->j = j;
+  this->k = k;
+}
 void Quaternion::normalize(float tolerance){
   float bigness = w*w + i*i + j*j + k*k;
   if(abs(1.0 - bigness) >= tolerance){

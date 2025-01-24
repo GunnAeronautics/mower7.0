@@ -36,6 +36,10 @@
 #define SD_MISO 19
 #define SD_MOSI 23
 #define SD_CS 4
+//#define SD_SCK 16
+//#define SD_MISO 17
+//#define SD_MOSI 15
+//#define SD_CS 4
 #endif
 
 #ifdef BARO
@@ -58,7 +62,9 @@ Adafruit_BMP3XX bmp;
 #ifdef BNO055
 #include <Adafruit_BNO055.h>
 #define BNO_ADDRESS 0x28
-
+#define CONFIG_MODE 0x00
+#define ACCONLY_MODE 0x01
+#define ACC_CONFIG_REGISTER 0x08
 Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 
 #endif
@@ -79,6 +85,10 @@ float pressure, temperature; // Pa C
 float lastAltitude;
 float altitudeV;     // in m/s
 float verticalAccel; // in m/s^2
+float xAccel; // in m/s^2
+float yAccel; // in m/s^2
+
+float heading;        // in radians
 float zenith;        // in radians
 
 // ground references for pressure function to work
@@ -120,10 +130,17 @@ RollingAverage altitudeVRoll(60);
 RollingAverage rocketDragCoefRoll(40);
 RollingAverage angularAirBreakDragCoefRoll(40);
 
+RollingAverage deltaTRoll(300);
 Quaternion orientation;
 Quaternion angularSpeed;
 SPIClass hspi(HSPI);
 SPIClass vspi(VSPI);
+void writeRegister(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(0x28); // BNO055 I2C address
+  Wire.write(reg);
+  Wire.write(value);
+  Wire.endTransmission();
+}
 #ifdef SIMULATE
 float pressureFunction()
 { // function of pressure to replace sensors
@@ -142,6 +159,15 @@ void IMU_BNO055setup()
       ;
   }
   bno.setExtCrystalUse(true);
+  bno.setMode(OPERATION_MODE_CONFIG);
+  delay(25); // Allow sensor to stabilize
+  writeRegister(ACC_CONFIG_REGISTER, 0x0C); // Set range to ±16g
+  Serial.println("Accelerometer set to ±16g range.");
+  // Switch to ACCONLY mode
+  bno.setMode(OPERATION_MODE_NDOF_FMC_OFF);
+  delay(25); // Allow sensor to stabilize
+
+
 }
 #endif
 void checkMax(float newData, float *maxData)
@@ -152,64 +178,6 @@ void checkMax(float newData, float *maxData)
   }
 }
 
-#ifdef MPU6050
-void IMUsetup()
-{
-  Wire.setClock(400000);
-  Wire.begin();
-  delay(250);
-  Wire.beginTransmission(MPU_ADDRESS); // address of mpu6050
-  Wire.write(0x6B);
-  Wire.write(0x00); // reseting MPU
-  Wire.endTransmission();
-
-  Wire.beginTransmission(MPU_ADDRESS); // address of mpu6050
-  Wire.write(0x1A);                    // switch on low pass filter
-  Wire.write(0x02);                    //~100 hz
-  Wire.endTransmission();
-
-  Wire.beginTransmission(MPU_ADDRESS);
-  Wire.write(0x1B); // gyroscope config
-  Wire.write(0x18); // configure range 250 deg/s
-  Wire.endTransmission();
-
-  Wire.beginTransmission(MPU_ADDRESS);
-  Wire.write(0x1C); // accelerometer config
-  Wire.write(0x18); // configure range 16g
-  Wire.endTransmission();
-}
-
-void accelData(void)
-{
-
-  Wire.beginTransmission(MPUADDRESS);
-  Wire.write(0x3B); // start of Accel out table
-  Wire.endTransmission();
-  Wire.requestFrom(MPUADDRESS, 6);
-  // 6 registers, 3 for each dimension (xyz) and 2 for the accuracy
-  // each register has 8 bits
-  int16_t AccelXLSB = Wire.read() << 8 | Wire.read(); // X
-  int16_t AccelYLSB = Wire.read() << 8 | Wire.read(); // Y
-  int16_t AccelZLSB = Wire.read() << 8 | Wire.read(); // Z
-  AccX = (float)AccelXLSB / 2048;
-  AccY = (float)AccelYLSB / 2048;
-  AccZ = (float)AccelZLSB / 2048;
-}
-void gyroData(void)
-{
-
-  Wire.beginTransmission(MPUADDRESS);
-  Wire.write(0x43); // start of Baro out table
-  Wire.endTransmission();
-  Wire.requestFrom(MPUADDRESS, 6);
-  int16_t GyroXLSB = Wire.read() << 8 | Wire.read(); // X
-  int16_t GyroYLSB = Wire.read() << 8 | Wire.read(); // Y
-  int16_t GyroZLSB = Wire.read() << 8 | Wire.read(); // Z
-  GyroX = (float)GyroXLSB / 131;
-  GyroY = (float)GyroYLSB / 131;
-  GyroZ = (float)GyroZLSB / 131;
-}
-#endif
 #ifdef SDCARD
 
 String logFilename;
@@ -302,6 +270,12 @@ void baroSetup()
   //        Serial.println("Could not find a valid BMP390 sensor, check wiring!");
   //        while (1);
   //    }
+
+  //bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_1X);
+  //bmp.setPressureOversampling(BMP3_OVERSAMPLING_32X);
+  //bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp.setOutputDataRate(BMP3_ODR_100_HZ);
+
 }
 float pressToAlt(float pres)
 {                                                                                                                                            // returns alt (m) from pressure in hecta pascals and temperature in celsius - FULLY TESTED
@@ -366,17 +340,21 @@ void setupDataLog()
                       (String)groundPressure + ',';
   // writeCSVLine(dataString);
 }
-
+String datalogHeader;
 void logData()
 {
   //Serial.println("Logging Data");
   // DATA INPUTS
+  //String dataStringTest = "1";
   String dataString = String(timeElapsed) + ',' +   // rocket flight time
                       String(pressure,DATAPRECISION) + ',' +      // pressure
                       String(altitude,DATAPRECISION) + ',' +      // alt
                       String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
-                      String(verticalAccel,DATAPRECISION) + ',' + // accel - imu derived
+                      String(xAccel,DATAPRECISION) + ',' + // accel - imu derived
+                      String(yAccel,DATAPRECISION) + ',' +
+                      String(verticalAccel,DATAPRECISION) + ',' +
                       String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
+
                       String(orientation.w,DATAPRECISION) + ',' + // rocket orientations
                       String(orientation.i,DATAPRECISION) + ',' +
                       String(orientation.j,DATAPRECISION) + ',' +
@@ -406,7 +384,7 @@ void logData()
                       "\n";
   // EXTRA
   writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
-  Serial.print(dataString);
+  //Serial.print(dataString);
 }
 
 void setup()
@@ -423,19 +401,12 @@ void setup()
   // WiFi.disconnect(true);
   // Disable Bluetooth
   // btStop();
-  delay(1000);
   Wire.begin(SDA_PIN, SCL_PIN);
+  delay(1000);
 
-#ifdef MPU6050
-  IMUsetup();
-#endif
 #ifdef BARO
   baroSetup();
   Serial.println("BMP390 Attached");
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_100_HZ);
 
 #endif
 
@@ -482,11 +453,15 @@ void setup()
   Serial.println("Orientation Initialized");
 #endif
 #ifdef SDCARD
+  datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
   sdSetup();
-  writeCSVLine(SD, logFilename.c_str(), "Time Elapsed, Pressure \n");
+  writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
 #endif
   lastT = micros();
   Serial.println("start");
+  delay(5000);
+  pinMode(2,OUTPUT);
+  digitalWrite(2,HIGH);
 }
 
 #ifdef BNO055
@@ -499,22 +474,39 @@ float radiansToDegrees(float angle)
 {
   return angle * 180 / PI;
 }
-float angleBetweenVertical(Quaternion orientation)
+
+float angleBetweenAxis(Quaternion orientation, String dir)
 {
-  // Quaternion vertical(0,0,1,0);//some lateral direction
-  Quaternion vertical(0, 0, 0, 1); // Z direction
-  // angle between Z axis: 0,0,0,1
-  // angle between Y axis: 0,0,1,0
-  // angle between X axis: 0,1,0,0
-  // if flippde then reverse the axis ex: 0,-1,0,04
-  // Quaternion vertical(0,0,0,0);//in the opposite lateral direction to the top
+  Quaternion axis;//bruh
+  if      (dir == "X+"){axis.setQuat(0, 1, 0, 0);}//shit code
+  else if (dir == "X-"){axis.setQuat(0, -1, 0, 0);}
+  else if (dir == "Y+"){axis.setQuat(0, 0, 1, 0);}
+  else if (dir == "Y-"){axis.setQuat(0, 0, -1, 0);}
+  else if (dir == "Z+"){axis.setQuat(0, 0, 0, 1);}
+  else if (dir == "Z-"){axis.setQuat(0, 0, 0, -1);}
 
   Quaternion copy = orientation;
-  orientation.mult(vertical);
+  orientation.mult(axis);
   orientation.mult(copy.inverse());
   // angle between vectors formula:
   return radiansToDegrees(acos(orientation.k / orientation.getLength()));
   // return orientation
+}
+
+
+float axisComponent(Quaternion orientation, float x, float y, float z, String dir ){
+  Quaternion quatVector(0, x, y, z);
+  Quaternion copy = orientation;
+  orientation.mult(quatVector);
+  orientation.mult(copy.inverse());
+  //orientation is now a vector normalized from the inputted vector in the global x y & z directions
+  if      (dir == "X+"){return orientation.i;}
+  else if (dir == "X-"){return -orientation.i;}
+  else if (dir == "Y+"){return orientation.j;}
+  else if (dir == "Y-"){return -orientation.j;}
+  else if (dir == "Z+"){return orientation.k;}
+  else if (dir == "Z-"){return -orientation.k;}
+  return 0;
 }
 float verticalAcceleration(Quaternion orientation, float accelX, float accelY, float accelZ)
 {
@@ -526,17 +518,6 @@ float verticalAcceleration(Quaternion orientation, float accelX, float accelY, f
   // the values may be reversed if the direction is flipped
   return orientation.k;
 }
-float magAngle(Quaternion orientation, float magX, float magY, float magZ)
-{
-  Quaternion mag(0, magX, magY, magZ);
-  Quaternion copy = orientation;
-  orientation.mult(mag);
-  orientation.mult(copy.inverse());
-  // return i if x direction is facing top, j if y direction is facing top, and k if z direction is facing top
-  // the values may be reversed if the direction is flipped
-  return radiansToDegrees(atan(orientation.i / orientation.j));
-}
-float trueAngle;
 
 
 void IMUdata()
@@ -565,8 +546,11 @@ void IMUdata()
                     degreesToRadians(gyro.z() * deltaT / 1000000));
   orientation.mult(angularSpeed);
   // imu::Quaternion quat = bno.getQuat();
-  zenith = angleBetweenVertical(orientation);
-  verticalAccel = verticalAcceleration(orientation, accel.x(), accel.y(), accel.z()) - GRAVITY;
+  zenith = angleBetweenAxis(orientation,"Z+");
+  verticalAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "Z+") - GRAVITY;
+  xAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "X+");
+  yAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "Y+");
+
   //trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
   bnoW = quat.w();
   bnoI = quat.x();
@@ -628,10 +612,9 @@ void loop()
   {
     timeElapsed = millis() - startTimeStamp;
   }
-#ifdef MPU6050
-  accelData();
-  gyroData();
-#endif
+  deltaTRoll.newData(deltaT);
+  Serial.println(deltaTRoll.getData());
+
 #ifdef BARO
   baroData();
   altitudeProcessing();
