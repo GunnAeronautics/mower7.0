@@ -29,19 +29,6 @@
 #define SDA_PIN 21
 #define SCL_PIN 22
 
-#ifdef SDCARD
-#include <sdCard.h>
-#define SD_SCK 18
-#define SD_MISO 19
-#define SD_MOSI 23
-#define SD_CS 4
-sdCard sdcard(SD_CS, hspi);
-// #define SD_SCK 16
-// #define SD_MISO 17
-// #define SD_MOSI 15
-// #define SD_CS 4
-#endif
-
 #ifdef BARO
 #include <Adafruit_BMP3XX.h>
 // #define BMP390_I2C_ADDRESS 0x77
@@ -143,10 +130,20 @@ void writeRegister(uint8_t reg, uint8_t value)
   Wire.endTransmission();
 }
 #ifdef SIMULATE
-float pressureFunction()
-{ // function of pressure to replace sensors
-  return 1000
-}
+float pressureFunction(){// function of pressure to replace sensors
+                         return 1000}
+#endif
+#ifdef SDCARD
+#include <sdCard.h>
+#define SD_SCK 18
+#define SD_MISO 19
+#define SD_MOSI 23
+#define SD_CS 4
+sdCard sdcard(SD_CS, hspi);
+// #define SD_SCK 16
+// #define SD_MISO 17
+// #define SD_MOSI 15
+// #define SD_CS 4
 #endif
 #ifdef BNO055
 void IMU_BNO055setup()

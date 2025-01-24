@@ -2,6 +2,7 @@
 #define SD_CARD_H
 
 #include <Arduino.h>
+#include <SPI.h>
 
 class sdCard
 {
