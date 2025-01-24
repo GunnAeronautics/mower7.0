@@ -3,10 +3,12 @@
 #include <FS.h>
 #include <SD.h>
 
-sdCard::sdCard(char sdCSPin)
+#define datalogHeader "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n"
+
+sdCard::sdCard(char sdCSPin, SPIClass sdSPI)
 {
     cardMounted = true;
-    if (!SD.begin(sdCSPin))
+    if (!SD.begin(sdCSPin, sdSPI))
     {
         cardMounted = true;
         Serial.println("Card Mount Failed");
@@ -42,6 +44,7 @@ sdCard::sdCard(char sdCSPin)
 
     this->logFilename = getNewLogFilename();
     Serial.println(logFilename);
+    writeCSVLine(datalogHeader);
 }
 void sdCard::writeCSVLine(String message)
 {

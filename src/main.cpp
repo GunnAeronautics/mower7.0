@@ -22,7 +22,7 @@
 // #define SIMULATE
 // #define SERVO
 
-#define DATAPRECISION 6// decimals
+#define DATAPRECISION 6 // decimals
 #ifdef SERVO
 #define SERVO1_PIN 4
 #endif
@@ -30,16 +30,16 @@
 #define SCL_PIN 22
 
 #ifdef SDCARD
-#include <FS.h>
-#include <SD.h>
+#include <sdCard.h>
 #define SD_SCK 18
 #define SD_MISO 19
 #define SD_MOSI 23
 #define SD_CS 4
-//#define SD_SCK 16
-//#define SD_MISO 17
-//#define SD_MOSI 15
-//#define SD_CS 4
+sdCard sdcard(SD_CS, hspi);
+// #define SD_SCK 16
+// #define SD_MISO 17
+// #define SD_MOSI 15
+// #define SD_CS 4
 #endif
 
 #ifdef BARO
@@ -68,7 +68,7 @@ Adafruit_BMP3XX bmp;
 Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 
 #endif
-char buffer[20]; 
+char buffer[20];
 #define GRAVITY 9.81              // m/s^2
 #define DESIRED_APOGEE 250        // m specified by TARC guidelines
 #define DESIRED_FLIGHT_TIME 45000 // miliseconds
@@ -85,11 +85,11 @@ float pressure, temperature; // Pa C
 float lastAltitude;
 float altitudeV;     // in m/s
 float verticalAccel; // in m/s^2
-float xAccel; // in m/s^2
-float yAccel; // in m/s^2
+float xAccel;        // in m/s^2
+float yAccel;        // in m/s^2
 
-float heading;        // in radians
-float zenith;        // in radians
+float heading; // in radians
+float zenith;  // in radians
 
 // ground references for pressure function to work
 float groundTemperature, groundPressure, altitude; // alt in meters
@@ -135,7 +135,8 @@ Quaternion orientation;
 Quaternion angularSpeed;
 SPIClass hspi(HSPI);
 SPIClass vspi(VSPI);
-void writeRegister(uint8_t reg, uint8_t value) {
+void writeRegister(uint8_t reg, uint8_t value)
+{
   Wire.beginTransmission(0x28); // BNO055 I2C address
   Wire.write(reg);
   Wire.write(value);
@@ -160,14 +161,12 @@ void IMU_BNO055setup()
   }
   bno.setExtCrystalUse(true);
   bno.setMode(OPERATION_MODE_CONFIG);
-  delay(25); // Allow sensor to stabilize
+  delay(25);                                // Allow sensor to stabilize
   writeRegister(ACC_CONFIG_REGISTER, 0x0C); // Set range to ±16g
   Serial.println("Accelerometer set to ±16g range.");
   // Switch to ACCONLY mode
   bno.setMode(OPERATION_MODE_NDOF_FMC_OFF);
   delay(25); // Allow sensor to stabilize
-
-
 }
 #endif
 void checkMax(float newData, float *maxData)
@@ -178,84 +177,6 @@ void checkMax(float newData, float *maxData)
   }
 }
 
-#ifdef SDCARD
-
-String logFilename;
-String getNewLogFilename()
-{
-  int fileIndex = 1;
-  String filename;
-  do
-  {
-    filename = "/datalog" + String(fileIndex) + ".csv";
-    fileIndex++;
-  } while (SD.exists(filename.c_str()));
-  return filename;
-}
-
-void sdSetup()
-{
-  if (!SD.begin(4, hspi))
-  {
-    Serial.println("Card Mount Failed");
-    return;
-  }
-  uint8_t cardType = SD.cardType();
-
-  if (cardType == CARD_NONE)
-  {
-    Serial.println("No SD card attached");
-    return;
-  }
-
-  Serial.print("SD Card Type: ");
-  if (cardType == CARD_MMC)
-  {
-    Serial.println("MMC");
-  }
-  else if (cardType == CARD_SD)
-  {
-    Serial.println("SDSC");
-  }
-  else if (cardType == CARD_SDHC)
-  {
-    Serial.println("SDHC");
-  }
-  else
-  {
-    Serial.println("UNKNOWN");
-  }
-
-  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-  Serial.printf("SD Card Size: %lluMB\n", cardSize);
-
-  logFilename = getNewLogFilename();
-  Serial.println(logFilename);
-  //writeCSVLine(SD, logFilename.c_str(), "Time, Baro");
-}
-
-// appendFile(SD, "/hello.txt", "World!\n");
-void writeCSVLine(fs::FS &fs, const char *path, const char *message)
-{
-  //Serial.printf("Appending to file: %s\n", path);
-  File file = fs.open(path, FILE_APPEND);
-  if (!file)
-  {
-    Serial.println("Failed to open file for appending");
-    return;
-  }
-  if (file.print(message))
-  {
-    //Serial.println("Message appended");
-  }
-  else
-  {
-    Serial.println("Append failed");
-  }
-  file.close();
-}
-
-#endif
 #ifdef BARO
 
 void baroSetup()
@@ -271,11 +192,10 @@ void baroSetup()
   //        while (1);
   //    }
 
-  //bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_1X);
-  //bmp.setPressureOversampling(BMP3_OVERSAMPLING_32X);
-  //bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_1X);
+  // bmp.setPressureOversampling(BMP3_OVERSAMPLING_32X);
+  // bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_100_HZ);
-
 }
 float pressToAlt(float pres)
 {                                                                                                                                            // returns alt (m) from pressure in hecta pascals and temperature in celsius - FULLY TESTED
@@ -338,44 +258,44 @@ void setupDataLog()
   String dataString = (String)groundTemperature + ',' +
                       (String)groundPressure + ',' +
                       (String)groundPressure + ',';
-  // writeCSVLine(dataString);
+  // sdcard.writeCSVLine(dataString);
 }
 String datalogHeader;
 void logData()
 {
-  //Serial.println("Logging Data");
-  // DATA INPUTS
-  //String dataStringTest = "1";
-  String dataString = String(timeElapsed) + ',' +   // rocket flight time
-                      String(pressure,DATAPRECISION) + ',' +      // pressure
-                      String(altitude,DATAPRECISION) + ',' +      // alt
-                      String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
-                      String(xAccel,DATAPRECISION) + ',' + // accel - imu derived
-                      String(yAccel,DATAPRECISION) + ',' +
-                      String(verticalAccel,DATAPRECISION) + ',' +
-                      String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
+  // Serial.println("Logging Data");
+  //  DATA INPUTS
+  // String dataStringTest = "1";
+  String dataString = String(timeElapsed) + ',' +              // rocket flight time
+                      String(pressure, DATAPRECISION) + ',' +  // pressure
+                      String(altitude, DATAPRECISION) + ',' +  // alt
+                      String(altitudeV, DATAPRECISION) + ',' + // velocity - baro derived
+                      String(xAccel, DATAPRECISION) + ',' +    // accel - imu derived
+                      String(yAccel, DATAPRECISION) + ',' +
+                      String(verticalAccel, DATAPRECISION) + ',' +
+                      String(zenith, DATAPRECISION) + ',' + // angle from the vertical
 
-                      String(orientation.w,DATAPRECISION) + ',' + // rocket orientations
-                      String(orientation.i,DATAPRECISION) + ',' +
-                      String(orientation.j,DATAPRECISION) + ',' +
-                      String(orientation.k,DATAPRECISION) + ',' +
-                      String(bnoW,DATAPRECISION) + ',' +
-                      String(bnoI,DATAPRECISION) + ',' +
-                      String(bnoJ,DATAPRECISION) + ',' +
-                      String(bnoK,DATAPRECISION) + ',' +
-                      String(MagX,DATAPRECISION) + ',' +
-                      String(MagY,DATAPRECISION) + ',' +
-                      String(MagZ,DATAPRECISION) + ',' +
-                      String(AccX,DATAPRECISION) + ',' +
-                      String(AccY,DATAPRECISION) + ',' +
-                      String(AccZ,DATAPRECISION) + ',' +
+                      String(orientation.w, DATAPRECISION) + ',' + // rocket orientations
+                      String(orientation.i, DATAPRECISION) + ',' +
+                      String(orientation.j, DATAPRECISION) + ',' +
+                      String(orientation.k, DATAPRECISION) + ',' +
+                      String(bnoW, DATAPRECISION) + ',' +
+                      String(bnoI, DATAPRECISION) + ',' +
+                      String(bnoJ, DATAPRECISION) + ',' +
+                      String(bnoK, DATAPRECISION) + ',' +
+                      String(MagX, DATAPRECISION) + ',' +
+                      String(MagY, DATAPRECISION) + ',' +
+                      String(MagZ, DATAPRECISION) + ',' +
+                      String(AccX, DATAPRECISION) + ',' +
+                      String(AccY, DATAPRECISION) + ',' +
+                      String(AccZ, DATAPRECISION) + ',' +
 
-                      //String()
-                      // // CONTROL
-                      // (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
-                      // (String)servoAngle + ',' +                                         // flap angle
-                      // (String)solenoidState + ',' +                                      // solenoid
-                      (String)flightState + ',' +                                        // flightState
+                      // String()
+                      //  // CONTROL
+                      //  (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
+                      //  (String)servoAngle + ',' +                                         // flap angle
+                      //  (String)solenoidState + ',' +                                      // solenoid
+                      (String)flightState + ',' + // flightState
                       // DRAG
                       // (String)totalDragCoef + ',' +         // totalDrag
                       // (String)angularRocketDragCoef + ',' + //
@@ -383,15 +303,15 @@ void logData()
                       // (String)angularAirBreakDragCoef +
                       "\n";
   // EXTRA
-  writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
-  //Serial.print(dataString);
+  sdcard.writeCSVLine(dataString);
+  // Serial.print(dataString);
 }
 
 void setup()
 {
   Serial.begin(115200);
   Serial.println("Serial Begin");
-  hspi.begin(SD_SCK,SD_MISO,SD_MOSI,SD_CS);
+  hspi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 #ifdef SERVO
   servo1.attach(SERVO1_PIN);
   Serial.println("Servo Attached");
@@ -452,16 +372,11 @@ void setup()
 
   Serial.println("Orientation Initialized");
 #endif
-#ifdef SDCARD
-  datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
-  sdSetup();
-  writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
-#endif
   lastT = micros();
   Serial.println("start");
   delay(5000);
-  pinMode(2,OUTPUT);
-  digitalWrite(2,HIGH);
+  pinMode(2, OUTPUT);
+  digitalWrite(2, HIGH);
 }
 
 #ifdef BNO055
@@ -477,13 +392,31 @@ float radiansToDegrees(float angle)
 
 float angleBetweenAxis(Quaternion orientation, String dir)
 {
-  Quaternion axis;//bruh
-  if      (dir == "X+"){axis.setQuat(0, 1, 0, 0);}//shit code
-  else if (dir == "X-"){axis.setQuat(0, -1, 0, 0);}
-  else if (dir == "Y+"){axis.setQuat(0, 0, 1, 0);}
-  else if (dir == "Y-"){axis.setQuat(0, 0, -1, 0);}
-  else if (dir == "Z+"){axis.setQuat(0, 0, 0, 1);}
-  else if (dir == "Z-"){axis.setQuat(0, 0, 0, -1);}
+  Quaternion axis; // bruh
+  if (dir == "X+")
+  {
+    axis.setQuat(0, 1, 0, 0);
+  } // shit code
+  else if (dir == "X-")
+  {
+    axis.setQuat(0, -1, 0, 0);
+  }
+  else if (dir == "Y+")
+  {
+    axis.setQuat(0, 0, 1, 0);
+  }
+  else if (dir == "Y-")
+  {
+    axis.setQuat(0, 0, -1, 0);
+  }
+  else if (dir == "Z+")
+  {
+    axis.setQuat(0, 0, 0, 1);
+  }
+  else if (dir == "Z-")
+  {
+    axis.setQuat(0, 0, 0, -1);
+  }
 
   Quaternion copy = orientation;
   orientation.mult(axis);
@@ -493,19 +426,37 @@ float angleBetweenAxis(Quaternion orientation, String dir)
   // return orientation
 }
 
-
-float axisComponent(Quaternion orientation, float x, float y, float z, String dir ){
+float axisComponent(Quaternion orientation, float x, float y, float z, String dir)
+{
   Quaternion quatVector(0, x, y, z);
   Quaternion copy = orientation;
   orientation.mult(quatVector);
   orientation.mult(copy.inverse());
-  //orientation is now a vector normalized from the inputted vector in the global x y & z directions
-  if      (dir == "X+"){return orientation.i;}
-  else if (dir == "X-"){return -orientation.i;}
-  else if (dir == "Y+"){return orientation.j;}
-  else if (dir == "Y-"){return -orientation.j;}
-  else if (dir == "Z+"){return orientation.k;}
-  else if (dir == "Z-"){return -orientation.k;}
+  // orientation is now a vector normalized from the inputted vector in the global x y & z directions
+  if (dir == "X+")
+  {
+    return orientation.i;
+  }
+  else if (dir == "X-")
+  {
+    return -orientation.i;
+  }
+  else if (dir == "Y+")
+  {
+    return orientation.j;
+  }
+  else if (dir == "Y-")
+  {
+    return -orientation.j;
+  }
+  else if (dir == "Z+")
+  {
+    return orientation.k;
+  }
+  else if (dir == "Z-")
+  {
+    return -orientation.k;
+  }
   return 0;
 }
 float verticalAcceleration(Quaternion orientation, float accelX, float accelY, float accelZ)
@@ -518,7 +469,6 @@ float verticalAcceleration(Quaternion orientation, float accelX, float accelY, f
   // the values may be reversed if the direction is flipped
   return orientation.k;
 }
-
 
 void IMUdata()
 {
@@ -546,12 +496,12 @@ void IMUdata()
                     degreesToRadians(gyro.z() * deltaT / 1000000));
   orientation.mult(angularSpeed);
   // imu::Quaternion quat = bno.getQuat();
-  zenith = angleBetweenAxis(orientation,"Z+");
+  zenith = angleBetweenAxis(orientation, "Z+");
   verticalAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "Z+") - GRAVITY;
   xAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "X+");
   yAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "Y+");
 
-  //trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
+  // trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
   bnoW = quat.w();
   bnoI = quat.x();
   bnoJ = quat.y();
@@ -589,7 +539,7 @@ void IMUdata()
   //  Serial.print(BNO.gyro.z);
   //  Serial.println();
   //  Serial.print(BNO.gyro.z);
-  //Serial.println();
+  // Serial.println();
 
   // Quaternion data
   // imu::Quaternion quat = bno.getQuat();

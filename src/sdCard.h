@@ -6,7 +6,7 @@
 class sdCard
 {
 public:
-    sdCard(char sdCSPin);
+    sdCard(char sdCSPin, SPIClass sdSPI);
     void writeCSVLine(String message);
     uint8_t cardType;
     uint64_t cardSize;
