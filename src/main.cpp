@@ -139,7 +139,7 @@ float pressureFunction(){// function of pressure to replace sensors
 #define SD_MISO 19
 #define SD_MOSI 23
 #define SD_CS 4
-sdCard sdcard(SD_CS, hspi);
+sdCard sdcard(SD_CS, SD_SCK, SD_MISO, SD_MOSI);
 // #define SD_SCK 16
 // #define SD_MISO 17
 // #define SD_MOSI 15
@@ -308,7 +308,6 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println("Serial Begin");
-  hspi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 #ifdef SERVO
   servo1.attach(SERVO1_PIN);
   Serial.println("Servo Attached");
@@ -368,6 +367,9 @@ void setup()
   orientation.k = quat.z();
 
   Serial.println("Orientation Initialized");
+#endif
+#ifdef SDCARD
+  sdcard.setupSD(hspi);
 #endif
   lastT = micros();
   Serial.println("start");
@@ -560,7 +562,7 @@ void loop()
     timeElapsed = millis() - startTimeStamp;
   }
   deltaTRoll.newData(deltaT);
-  Serial.println(deltaTRoll.getData());
+  // Serial.println(deltaTRoll.getData());
 
 #ifdef BARO
   baroData();

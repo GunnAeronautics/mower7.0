@@ -6,15 +6,29 @@
 
 #define datalogHeader "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n"
 
-sdCard::sdCard(char sdCSPin, SPIClass sdSPI)
+sdCard::sdCard(char sdCSPin_IN, char sdSCKPin_IN, char sdMISOPin_IN, char sdMOSIPin_IN)
 {
-    cardMounted = true;
+    sdCSPin = sdCSPin_IN;
+    sdSCKPin = sdSCKPin_IN;
+    sdMISOPin = sdMISOPin_IN;
+    sdMOSIPin = sdMOSIPin_IN;
+}
+void sdCard::setupSD(SPIClass &sdSPI)
+{
+    sdSPI.begin(sdSCKPin, sdMISOPin, sdMOSIPin, sdCSPin);
+    cardMounted = false;
+    Serial.println("MOUNTING SD CARD");
     if (!SD.begin(sdCSPin, sdSPI))
     {
-        cardMounted = true;
         Serial.println("Card Mount Failed");
         return;
     }
+    else
+    {
+        cardMounted = true;
+    }
+    Serial.print("after mount: ");
+    Serial.println(cardMounted);
     this->cardType = SD.cardType();
 
     if (cardType == CARD_NONE)
@@ -59,10 +73,10 @@ void sdCard::writeCSVLine(String message)
     File file = SD.open(logFilename, FILE_APPEND);
     if (!file)
     {
-        Serial.println("Failed to open file for appending");
+        Serial.println("naf");
         return;
     }
-    if (file.print(*convertedMessage))
+    if (file.print(message))
     {
         Serial.println("Message appended");
     }
