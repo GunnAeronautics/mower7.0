@@ -404,29 +404,26 @@ void logData()
 }
 void TaskBlink(void *parameter) {
   char receivedData[MAX_STRING_SIZE];
-  char lumpData[3000] = "";
+  char lumpData[5000] = "";
   sdSetup();
   datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
 
   writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
-
+  int lastTT;
   while (1) {
-    if ((xQueueReceive(xQueue, &receivedData,0) == pdPASS)&&(strlen(lumpData) < 2000)){
-        Serial.println("NEW RECIEVED DATA BRO");
-
+    if ((xQueueReceive(xQueue, &receivedData,0) == pdPASS)&&(strlen(lumpData) < 3000)){
       strcat(lumpData,receivedData);
-  
-      
-
     }
     else {
-      Serial.print("emptyLumpData");//Serial.println(lumpData);
+      lastTT = micros();
+      Serial.print("emptyLumpData");
       
 
       //delay(70);
       writeCSVLine(SD, logFilename.c_str(), lumpData);
       memset(lumpData, 0, sizeof(lumpData));//reset the memory of the lumpData
       }
+      Serial.println(micros()-lastTT);
     }
   }
 
@@ -500,7 +497,7 @@ delay(1000);
 #endif
 #ifdef SDCARD
 
-  xQueue = xQueueCreate(5,MAX_STRING_SIZE);//~300 bytes per line
+  xQueue = xQueueCreate(10,MAX_STRING_SIZE);//~300 bytes per line
   xTaskCreatePinnedToCore(
       TaskBlink,      // Function to execute
       "Blink Task",   // Task name
@@ -516,6 +513,16 @@ delay(1000);
   Serial.println("start");
   delay(5000);
   pinMode(2,OUTPUT);
+xTaskCreatePinnedToCore(
+      TaskBlink,      // Function to execute
+      "Blink Task",   // Task name
+      8192,           // Stack size (in words)
+      NULL,           // Task input parameter
+      1,              // Priority (higher number = higher priority)
+      &Task1,         // Task handle
+      1               // Core 1
+    );
+
   digitalWrite(2,HIGH);
 }
 
@@ -657,6 +664,7 @@ void IMUdata()
 
 void loop()
 {
+  //delay(100);
   deltaT = micros() - lastT;
   lastT = micros();
   if (startTimeStamp = 0)
@@ -668,7 +676,7 @@ void loop()
     timeElapsed = millis() - startTimeStamp;
   }
   deltaTRoll.newData(deltaT);
-  Serial.println(deltaTRoll.getData());
+  //Serial.println(deltaTRoll.getData());
 
 #ifdef BARO
   baroData();
