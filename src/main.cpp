@@ -498,15 +498,7 @@ delay(1000);
 #ifdef SDCARD
 
   xQueue = xQueueCreate(10,MAX_STRING_SIZE);//~300 bytes per line
-  xTaskCreatePinnedToCore(
-      TaskBlink,      // Function to execute
-      "Blink Task",   // Task name
-      8192,           // Stack size (in words)
-      NULL,           // Task input parameter
-      1,              // Priority (higher number = higher priority)
-      &Task1,         // Task handle
-      1               // Core 1
-    );
+
 
 #endif
   lastT = micros();
