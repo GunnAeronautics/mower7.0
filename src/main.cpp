@@ -36,6 +36,7 @@
 #define SD_MISO 19
 #define SD_MOSI 23
 #define SD_CS 4
+#define MAX_STRING_SIZE 300
 //#define SD_SCK 16
 //#define SD_MISO 17
 //#define SD_MOSI 15
@@ -104,7 +105,7 @@ float pitch;
 float roll;
 
 unsigned long lastT;
-int deltaT;
+static int deltaT;
 int startTimeStamp = 0; // ms
 int timeElapsed = 0;    // time elapsed in flight (ms)
 
@@ -135,6 +136,10 @@ Quaternion orientation;
 Quaternion angularSpeed;
 SPIClass hspi(HSPI);
 SPIClass vspi(VSPI);
+
+TaskHandle_t Task1;
+QueueHandle_t xQueue;
+
 void writeRegister(uint8_t reg, uint8_t value) {
   Wire.beginTransmission(0x28); // BNO055 I2C address
   Wire.write(reg);
@@ -382,10 +387,50 @@ void logData()
                       // (String)rocketDragCoef + ',' +
                       // (String)angularAirBreakDragCoef +
                       "\n";
+  char buffer[MAX_STRING_SIZE] = "";
+  strncpy(buffer, dataString.c_str(), MAX_STRING_SIZE);  
+  if (uxQueueSpacesAvailable(xQueue) > 0) {
+    xQueueSend(xQueue,(void*)&buffer,0);
+    Serial.println(uxQueueSpacesAvailable(xQueue));
+
+  }
+  else{
+    Serial.println("SD queue full");
+  }
   // EXTRA
-  writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
+  //writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
+  //writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
   //Serial.print(dataString);
 }
+void TaskBlink(void *parameter) {
+  char receivedData[MAX_STRING_SIZE];
+  char lumpData[3000] = "";
+  sdSetup();
+  datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
+
+  writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
+
+  while (1) {
+    if ((xQueueReceive(xQueue, &receivedData,0) == pdPASS)&&(strlen(lumpData) < 2000)){
+        Serial.println("NEW RECIEVED DATA BRO");
+
+      strcat(lumpData,receivedData);
+  
+      
+
+    }
+    else {
+      Serial.print("emptyLumpData");//Serial.println(lumpData);
+      
+
+      //delay(70);
+      writeCSVLine(SD, logFilename.c_str(), lumpData);
+      memset(lumpData, 0, sizeof(lumpData));//reset the memory of the lumpData
+      }
+    }
+  }
+
+
 
 void setup()
 {
@@ -409,6 +454,7 @@ void setup()
   Serial.println("BMP390 Attached");
 
 #endif
+delay(1000);
 
 #ifdef BNO055
   IMU_BNO055setup();
@@ -453,9 +499,18 @@ void setup()
   Serial.println("Orientation Initialized");
 #endif
 #ifdef SDCARD
-  datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
-  sdSetup();
-  writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
+
+  xQueue = xQueueCreate(5,MAX_STRING_SIZE);//~300 bytes per line
+  xTaskCreatePinnedToCore(
+      TaskBlink,      // Function to execute
+      "Blink Task",   // Task name
+      8192,           // Stack size (in words)
+      NULL,           // Task input parameter
+      1,              // Priority (higher number = higher priority)
+      &Task1,         // Task handle
+      1               // Core 1
+    );
+
 #endif
   lastT = micros();
   Serial.println("start");
