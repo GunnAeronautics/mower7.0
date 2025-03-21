@@ -17,14 +17,24 @@
 #define BARO
 // #define MPU6050
 #define BNO055
-#define SDCARD
+//#define SDCARD
+// #define BLUETOOTH
 // #define groundTesting
 // #define SIMULATE
-// #define SERVO
+#define SERVO
 
-#define DATAPRECISION 6// decimals
+#define DATAPRECISION 2// decimals
+
+#ifdef BLUETOOTH
+#include "BluetoothSerial.h"
+
+#endif
 #ifdef SERVO
-#define SERVO1_PIN 4
+#define SERVO1_PIN 13//45 is unarmed, 135 is release parachute
+#define SERVO2_PIN 27
+#define SERVO3_PIN 26
+#define SERVO4_PIN 25
+
 #endif
 #define SDA_PIN 21
 #define SCL_PIN 22
@@ -32,24 +42,21 @@
 #ifdef SDCARD
 #include <FS.h>
 #include <SD.h>
-#define SD_SCK 18
-#define SD_MISO 19
-#define SD_MOSI 23
-#define SD_CS 4
+#define SD_SCK 15
+#define SD_MISO 4
+#define SD_MOSI 17
+#define SD_CS 16
 #define MAX_STRING_SIZE 300
-//#define SD_SCK 16
-//#define SD_MISO 17
-//#define SD_MOSI 15
-//#define SD_CS 4
+
 #endif
 
 #ifdef BARO
 #include <Adafruit_BMP3XX.h>
 // #define BMP390_I2C_ADDRESS 0x77
 // SPI:
-#define BMP_SCK 16
-#define BMP_MISO 17
-#define BMP_MOSI 15
+#define BMP_SCK 23
+#define BMP_MISO 19
+#define BMP_MOSI 18
 #define BMP_CS 5
 Adafruit_BMP3XX bmp;
 #endif
@@ -112,7 +119,9 @@ int timeElapsed = 0;    // time elapsed in flight (ms)
 int flightState = 0;                   // state of the rocket's control
 int flightStateAdvancementTrigger = 0; // counts number of times state switching event occurs
 int flighti = 0;                       // something advanced
-int servoAngle;                        // servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
+int servoDragForce = 0;                        // servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
+volatile int howManyDatas = 0;
+
 bool solenoidState;                    // state of the solenoid 0 for unreleased 1 to release
 float bnoW;
 float bnoI;
@@ -120,8 +129,17 @@ float bnoJ;
 float bnoK;
 // webhooktest
 //  put function declarations here:
+bool lastLED = true;
+
 #ifdef SERVO
+float minServo1 = 0;
+float maxServo1 = 100;
+
 Servo servo1; // create servo
+Servo servo2; // create servo
+Servo servo3; // create servo
+Servo servo4; // create servo
+
 #endif
 RollingAverage pressureRoll(60);
 RollingAverage temperatureRoll(60);
@@ -139,7 +157,11 @@ SPIClass vspi(VSPI);
 
 TaskHandle_t Task1;
 QueueHandle_t xQueue;
+#ifdef BLUETOOTH
+void bluetoothSetup(){
 
+}
+#endif
 void writeRegister(uint8_t reg, uint8_t value) {
   Wire.beginTransmission(0x28); // BNO055 I2C address
   Wire.write(reg);
@@ -200,7 +222,7 @@ String getNewLogFilename()
 
 void sdSetup()
 {
-  if (!SD.begin(4, hspi))
+  if (!SD.begin(SD_CS, hspi))
   {
     Serial.println("Card Mount Failed");
     return;
@@ -246,16 +268,18 @@ void writeCSVLine(fs::FS &fs, const char *path, const char *message)
   File file = fs.open(path, FILE_APPEND);
   if (!file)
   {
-    Serial.println("Failed to open file for appending");
+    //Serial.println("Failed to open file for appending");
     return;
   }
   if (file.print(message))
   {
+    lastLED = !lastLED;
+    digitalWrite(2,lastLED);
     //Serial.println("Message appended");
   }
   else
   {
-    Serial.println("Append failed");
+    //Serial.println("Append failed");
   }
   file.close();
 }
@@ -277,8 +301,8 @@ void baroSetup()
   //    }
 
   //bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_1X);
-  //bmp.setPressureOversampling(BMP3_OVERSAMPLING_32X);
-  //bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_32X);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_100_HZ);
 
 }
@@ -338,6 +362,7 @@ float inverseApogee()
   }
   return mid / searchRangeH * DRAG_FLAP_RANGE; // returns angle for ddrag flaps to occupy
 }
+#ifdef SDCARD
 void setupDataLog()
 {
   String dataString = (String)groundTemperature + ',' +
@@ -345,7 +370,9 @@ void setupDataLog()
                       (String)groundPressure + ',';
   // writeCSVLine(dataString);
 }
+#endif
 String datalogHeader;
+int queueOverflowCoolown = 0;
 void logData()
 {
   //Serial.println("Logging Data");
@@ -360,10 +387,10 @@ void logData()
                       String(verticalAccel,DATAPRECISION) + ',' +
                       String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
 
-                      String(orientation.w,DATAPRECISION) + ',' + // rocket orientations
-                      String(orientation.i,DATAPRECISION) + ',' +
-                      String(orientation.j,DATAPRECISION) + ',' +
-                      String(orientation.k,DATAPRECISION) + ',' +
+                      // String(orientation.w,DATAPRECISION) + ',' + // rocket orientations
+                      // String(orientation.i,DATAPRECISION) + ',' +
+                      // String(orientation.j,DATAPRECISION) + ',' +
+                      // String(orientation.k,DATAPRECISION) + ',' +
                       String(bnoW,DATAPRECISION) + ',' +
                       String(bnoI,DATAPRECISION) + ',' +
                       String(bnoJ,DATAPRECISION) + ',' +
@@ -378,64 +405,110 @@ void logData()
                       //String()
                       // // CONTROL
                       // (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
-                      // (String)servoAngle + ',' +                                         // flap angle
+                      (String)servoDragForce + ',' +                                         // flap angle
                       // (String)solenoidState + ',' +                                      // solenoid
                       (String)flightState + ',' +                                        // flightState
                       // DRAG
-                      // (String)totalDragCoef + ',' +         // totalDrag
-                      // (String)angularRocketDragCoef + ',' + //
-                      // (String)rocketDragCoef + ',' +
-                      // (String)angularAirBreakDragCoef +
+                      (String)totalDragCoef + ',' +         // totalDrag
+                      (String)angularRocketDragCoef + ',' + //
+                      (String)rocketDragCoef + ',' +
+                      (String)angularAirBreakDragCoef +
                       "\n";
-  char buffer[MAX_STRING_SIZE] = "";
-  strncpy(buffer, dataString.c_str(), MAX_STRING_SIZE);  
-  if (uxQueueSpacesAvailable(xQueue) > 0) {
-    xQueueSend(xQueue,(void*)&buffer,0);
-    Serial.println(uxQueueSpacesAvailable(xQueue));
+  // if (howManyDatas < 10){// enable or disable logging
+  // char buffer[MAX_STRING_SIZE] = "";
+  //if (xQueueSend(xQueue, "1", portMAX_DELAY) != pdPASS){
+// //UNDO COMMENTS BELOWO
+  #ifdef SDCARD
+  if (xQueueSend(xQueue, dataString.c_str(), 0) != pdPASS){
+    Serial.println("Queue Full! Data Lost.");
+  } 
+  #else
+  Serial.println(dataString);
+  #endif
+//NOW STOP UNDO
+    //Serial.println(uxQueueSpacesAvailable(xQueue));
 
-  }
-  else{
-    Serial.println("SD queue full");
-  }
+    // Serial.println("SD queue full");
+    // queueOverflowCoolown = millis()+200;
+  
   // EXTRA
   //writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
   //writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
-  //Serial.print(dataString);
-}
-void TaskBlink(void *parameter) {
+  //Serial.println(dataString);
+ }
+#ifdef SDCARD
+void sdTask(void *parameter) {
   char receivedData[MAX_STRING_SIZE];
   char lumpData[5000] = "";
-  sdSetup();
+  int lastTsdWrite;
+  int lastWriteTTTTT;//timebetween writing
   datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
 
   writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
-  int lastTT;
+  delay(1000);
   while (1) {
-    if ((xQueueReceive(xQueue, &receivedData,0) == pdPASS)&&(strlen(lumpData) < 3000)){
-      strcat(lumpData,receivedData);
-    }
-    else {
-      lastTT = micros();
-      Serial.print("emptyLumpData");
+    if ((howManyDatas < 10)){
       
-
-      //delay(70);
-      writeCSVLine(SD, logFilename.c_str(), lumpData);
-      memset(lumpData, 0, sizeof(lumpData));//reset the memory of the lumpData
+      if (xQueueReceive(xQueue, &receivedData,0) == pdPASS){//if theres new data in the queue
+      strcat(lumpData,receivedData);
+      howManyDatas += 1;
       }
-      Serial.println(micros()-lastTT);
+      else if (howManyDatas != 0){
+        writeCSVLine(SD, logFilename.c_str(), lumpData);
+        //Serial.println(lumpData);
+        memset(lumpData, 0, sizeof(lumpData));
+        howManyDatas = 0;
+      }
+    }
+    
+    else{
+      writeCSVLine(SD, logFilename.c_str(), lumpData);
+      //Serial.println(lumpData);
+      memset(lumpData, 0, sizeof(lumpData));
+
+      howManyDatas = 0;
+    }
+    
+    // }
+    // else {
+    //   // if ((howManyDatas <= 5)){//((millis()-lastTsdWrite) < 50)||
+    //   //   continue;
+    //   // }
+    //   lastTsdWrite = millis();
+
+
+
+    //   // Serial.print("emptyLumpData datas going to upload: ");
+    //   // Serial.print(howManyDatas);
+    //   // Serial.print(" timeTakenBetweenEmpty: ");
+    //   // Serial.print(micros()-lastTsdWrite);
+
+    //   howManyDatas = 0;
+    //   //delay(70);
+      // lastWriteTTTTT = micros();
+      // delete[] zzz//reset the memory of the lumpData
+      // Serial.print("Time taken to upload: ");
+      // Serial.print(micros()-lastWriteTTTTT);
+      
     }
   }
-
-
-
+#endif
+int angleToBlink(double power){// scale of 0 to 90
+  return 180 - (int)power;//tony rocket method
+}
+void deployChute(){
+  servo1.write(90);
+}
 void setup()
 {
   Serial.begin(115200);
   Serial.println("Serial Begin");
-  hspi.begin(SD_SCK,SD_MISO,SD_MOSI,SD_CS);
 #ifdef SERVO
   servo1.attach(SERVO1_PIN);
+  servo2.attach(SERVO2_PIN);
+  servo3.attach(SERVO3_PIN);
+  servo4.attach(SERVO4_PIN);
+
   Serial.println("Servo Attached");
 #endif
   // Disable Wi-Fi
@@ -451,7 +524,6 @@ void setup()
   Serial.println("BMP390 Attached");
 
 #endif
-delay(1000);
 
 #ifdef BNO055
   IMU_BNO055setup();
@@ -460,17 +532,28 @@ delay(1000);
 
 #endif
 #ifdef SERVO
-  for (int i = 0; i < 180; i++)
+  for (int i = 90; i < 180; i++)
   {
-    servo1.write(i);
+    servo2.write(i);
+    servo3.write(i);
+    servo4.write(i);
+
     delay(10);
   }
-  for (int i = 180; i > 0; i--)
+  for (int i = 180; i > 90; i--)
   {
-    servo1.write(i);
+    servo2.write(i);
+    servo3.write(i);
+    servo4.write(i);
     delay(10);
   }
+  servo1.write(180);
   Serial.println("Servo Test Done");
+  servo2.write(angleToBlink(0));
+  servo3.write(angleToBlink(0));
+  servo4.write(angleToBlink(0));
+
+
 #endif
 #ifdef BARO
   for (int i = 0; i < 120; i++)
@@ -496,8 +579,20 @@ delay(1000);
   Serial.println("Orientation Initialized");
 #endif
 #ifdef SDCARD
+  sdSetup();
+  hspi.begin(SD_SCK,SD_MISO,SD_MOSI,SD_CS);
 
   xQueue = xQueueCreate(10,MAX_STRING_SIZE);//~300 bytes per line
+  delay(1000);
+  xTaskCreatePinnedToCore(
+    sdTask,      // Function to execute
+    "Blink Task",   // Task name
+    8192,           // Stack size (in words)
+    NULL,           // Task input parameter
+    1,              // Priority (higher number = higher priority)
+    &Task1,         // Task handle
+    1               // Core 1
+  );
 
 
 #endif
@@ -505,15 +600,6 @@ delay(1000);
   Serial.println("start");
   delay(5000);
   pinMode(2,OUTPUT);
-xTaskCreatePinnedToCore(
-      TaskBlink,      // Function to execute
-      "Blink Task",   // Task name
-      8192,           // Stack size (in words)
-      NULL,           // Task input parameter
-      1,              // Priority (higher number = higher priority)
-      &Task1,         // Task handle
-      1               // Core 1
-    );
 
   digitalWrite(2,HIGH);
 }
@@ -656,7 +742,6 @@ void IMUdata()
 
 void loop()
 {
-  //delay(100);
   deltaT = micros() - lastT;
   lastT = micros();
   if (startTimeStamp = 0)
@@ -700,7 +785,7 @@ void loop()
     Serial.println("waiting on launch pad");
 
     // flight switching code_______________
-    if ((verticalAccel > 20) || (altitude > 10))
+    if ((verticalAccel > 10) || (altitude > 5))
     { // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
@@ -720,7 +805,7 @@ void loop()
     // do main rocket logic here VVV
 
     // flight switching code_______________
-    if (!DUMMY_ROCKET && ((verticalAccel < 0) || (timeElapsed > 3000)))
+    if ((verticalAccel < 0) || (timeElapsed > 2000))
     { // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
@@ -749,21 +834,21 @@ void loop()
     totalDragCoef = verticalAccel / pow(altitudeV, 2);
     if (altitude > DESIRED_APOGEE)
     {
-      servoAngle = 90;
+      servoDragForce = 90;
     }
     if (flighti < 100)
     { // servos at 0
-      servoAngle = 0;
+      servoDragForce = 0;
       rocketDragCoefRoll.newData(totalDragCoef);
     }
     else if (flighti < 200)
     { // servos at 90
-      servoAngle = 90;
+      servoDragForce = 90;
       angularAirBreakDragCoefRoll.newData(totalDragCoef - rocketDragCoefRoll.getData());
     }
     else
     {
-      servoAngle = inverseApogee();
+      servoDragForce = inverseApogee();
     }
 
     // flight switching code_______________
@@ -772,7 +857,7 @@ void loop()
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
       { // tune this thresholds
-        flightState = 2;
+        flightState++;
         flightStateAdvancementTrigger = 0;
       }
     }
@@ -785,9 +870,10 @@ void loop()
     break;
   case 4: // decent
     // do main rocket logic here VVV
-    if (altitude < (DESIRED_FLIGHT_TIME - timeElapsed) * PARACHUTE_TERM_VELOCITY)
+    if (altitude < (DESIRED_FLIGHT_TIME - timeElapsed) * PARACHUTE_TERM_VELOCITY
+        || altitude < 60)
     {
-      solenoidState = 1;
+      deployChute();
     }
     // flight switching code_______________
     if (((-1 < altitudeV) && (altitudeV < 1)) || (timeElapsed > 100000))
@@ -795,7 +881,7 @@ void loop()
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
       { // tune this thresholds
-        flightState = 2;
+        flightState++;
         flightStateAdvancementTrigger = 0;
       }
     }
@@ -807,11 +893,17 @@ void loop()
     logData();
     break;
   case 5: // on the ground yippee
+    Serial.println("Done");
     // do whatever u want here
+    //flighti =0;
+    //flightState = 1;
     break;
   }
 #ifdef SERVO
-  servo1.write(servoAngle);
+  servo2.write(angleToBlink(servoDragForce));
+  servo3.write(angleToBlink(servoDragForce));
+  servo4.write(angleToBlink(servoDragForce));
+
 #endif
   // Serial.print(",accelX:");
   // Serial.print(groundPressure);
