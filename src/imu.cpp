@@ -6,12 +6,12 @@
 Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 Quaternion orientation;
 Quaternion angularSpeed;
-
+Quaternion bnoOrientation;
 float GyroX, GyroY, GyroZ; // deg / sec
 float AccX, AccY, AccZ;    // Gs
 float MagX, MagY, MagZ;    // Gs
 
-float verticalAccel; // in m/s^2
+float zAccel; // in m/s^2
 float xAccel; // in m/s^2
 float yAccel; // in m/s^2
 
@@ -77,7 +77,7 @@ void IMU_BNO055setup()
     return angle * 180 / PI;
   }
   
-  float angleBetweenAxis(Quaternion orientation, String dir)
+  float angleBetweenAxis(Quaternion newOrientation, String dir)
   {
     Quaternion axis;//bruh
     if      (dir == "X+"){axis.setQuat(0, 1, 0, 0);}//shit code
@@ -87,38 +87,38 @@ void IMU_BNO055setup()
     else if (dir == "Z+"){axis.setQuat(0, 0, 0, 1);}
     else if (dir == "Z-"){axis.setQuat(0, 0, 0, -1);}
   
-    Quaternion copy = orientation;
-    orientation.mult(axis);
-    orientation.mult(copy.inverse());
+    Quaternion copy = newOrientation;
+    newOrientation.mult(axis);
+    newOrientation.mult(copy.inverse());
     // angle between vectors formula:
-    return radiansToDegrees(acos(orientation.k / orientation.getLength()));
+    return radiansToDegrees(acos(newOrientation.k / newOrientation.getLength()));
     // return orientation
   }
   
   
-  float axisComponent(Quaternion orientation, float x, float y, float z, String dir ){
+  float axisComponent(Quaternion newOrientation, float x, float y, float z, String dir ){
     Quaternion quatVector(0, x, y, z);
-    Quaternion copy = orientation;
-    orientation.mult(quatVector);
-    orientation.mult(copy.inverse());
+    Quaternion copy = newOrientation;
+    newOrientation.mult(quatVector);
+    newOrientation.mult(copy.inverse());
     //orientation is now a vector normalized from the inputted vector in the global x y & z directions
-    if      (dir == "X+"){return orientation.i;}
-    else if (dir == "X-"){return -orientation.i;}
-    else if (dir == "Y+"){return orientation.j;}
-    else if (dir == "Y-"){return -orientation.j;}
-    else if (dir == "Z+"){return orientation.k;}
-    else if (dir == "Z-"){return -orientation.k;}
+    if      (dir == "X+"){return newOrientation.i;}
+    else if (dir == "X-"){return -newOrientation.i;}
+    else if (dir == "Y+"){return newOrientation.j;}
+    else if (dir == "Y-"){return -newOrientation.j;}
+    else if (dir == "Z+"){return newOrientation.k;}
+    else if (dir == "Z-"){return -newOrientation.k;}
     return 0;
   }
-  float verticalAcceleration(Quaternion orientation, float accelX, float accelY, float accelZ)
+  float verticalAcceleration(Quaternion newOrientation, float accelX, float accelY, float accelZ)
   {
     Quaternion accel(0, accelX, accelY, accelZ);
-    Quaternion copy = orientation;
-    orientation.mult(accel);
-    orientation.mult(copy.inverse());
+    Quaternion copy = newOrientation;
+    newOrientation.mult(accel);
+    newOrientation.mult(copy.inverse());
     // return i if x direction is facing top, j if y direction is facing top, and k if z direction is facing top
     // the values may be reversed if the direction is flipped
-    return orientation.k;
+    return newOrientation.k;
   }
   
   
@@ -143,21 +143,27 @@ void IMU_BNO055setup()
     // roll += gyro.z()*deltaT/1000000;
     // orientation.gyro(degreesToRadians(yaw),degreesToRadians(pitch),degreesToRadians(roll));
     // Quaternion orientation(quat.w(),quat.x(),quat.y(),quat.z());
+
+  
     angularSpeed.gyro(degreesToRadians(gyro.x() * deltaT / 1000000),
                       degreesToRadians(gyro.y() * deltaT / 1000000),
                       degreesToRadians(gyro.z() * deltaT / 1000000));
-    orientation.mult(angularSpeed);
+    //orientation.mult(angularSpeed);
     // imu::Quaternion quat = bno.getQuat();
-    zenith = angleBetweenAxis(orientation,"Z+");
-    verticalAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "Z+") - GRAVITY;
-    xAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "X+");
-    yAccel = axisComponent(orientation, accel.x(), accel.y(), accel.z(), "Y+");
-  
-    //trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
     bnoW = quat.w();
     bnoI = quat.x();
     bnoJ = quat.y();
     bnoK = quat.z();
+
+    bnoOrientation.setQuat(quat.w(),quat.x(),quat.y(),quat.z());
+
+    zenith = angleBetweenAxis(bnoOrientation,"Y+");
+    zAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Z+")-9.8;
+    xAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "X+");
+    yAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Y+");
+  
+    //trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
+
     MagX = mag.x();
     MagY = mag.y();
     MagZ = mag.z();

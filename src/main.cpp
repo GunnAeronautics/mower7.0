@@ -55,7 +55,6 @@ int servoDragForce = 0;                        // servo angle for drag flaps, 0 
 //  put function declarations here:
 
 // RollingAverage angularRocketDragCoefRoll;
-RollingAverage rocketDragCoefRoll(40);
 RollingAverage angularAirBreakDragCoefRoll(40);
 
 RollingAverage deltaTRoll(300);
@@ -96,7 +95,7 @@ void dataLogging(){
                       String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
                       String(xAccel,DATAPRECISION) + ',' + // accel - imu derived
                       String(yAccel,DATAPRECISION) + ',' +
-                      String(verticalAccel,DATAPRECISION) + ',' +
+                      String(zAccel,DATAPRECISION) + ',' +
                       String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
 
                       // String(orientation.w,DATAPRECISION) + ',' + // rocket orientations
@@ -116,15 +115,15 @@ void dataLogging(){
 
                       //String()
                       // // CONTROL
-                      // (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
-                      (String)servoDragForce + ',' +                                         // flap angle
+                      (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
+                      // (String)servoDragForce + ',' +                                         // flap angle
                       // (String)solenoidState + ',' +                                      // solenoid
                       (String)flightState + ',' +                                        // flightState
                       // DRAG
-                      (String)totalDragCoef + ',' +         // totalDrag
-                      (String)angularRocketDragCoef + ',' + //
-                      (String)rocketDragCoef + ',' +
-                      (String)angularAirBreakDragCoef +
+                      // (String)totalDragCoef + ',' +         // totalDrag
+                      // (String)angularRocketDragCoef + ',' + //
+                      // (String)rocketDragCoef + ',' +
+                      // (String)angularAirBreakDragCoef +
                       "\n";
   logData(dataString);
 }
@@ -174,36 +173,24 @@ void loop()
   deltaTRoll.newData(deltaT);
   //Serial.println(deltaTRoll.getData());
 
-#ifdef BARO
   baroData();
   altitudeProcessing(deltaT);
-#endif
-#ifdef BNO055
-  IMUdata(deltaT);
-#endif
+  IMUdata(deltaT)
+  ;
   // main control things
   switch (flightState)
   {
   case 0: // happy data printing mode
     dataLogging();
-    Serial.print(altitude);
-    Serial.print(",");
-    Serial.print(altitudeV);
-    Serial.print(",");
-    Serial.print(altitudeBuiltInV);
-    Serial.print(",");
-    Serial.println(builtInAltitude);
+
     //Serial.print(",");
     //Serial.println(deltaT/1000.);
     // Serial.print(deltaT);Serial.print(",");
 
-    /*
-      Serial.print(altitude);Serial.print(",");
+    
+    Serial.print(zAccel-9.8);Serial.print(",");
+    Serial.println();
 
-      Serial.print(altitudeV);Serial.print(",");
-      Serial.print(pressureRoll.getData());Serial.print(",");
-      Serial.print(groundPressure);Serial.print(",");
-      Serial.print(groundTemperature);Serial.print(",");*/
     // Serial.print(pressure/pressureMax*GRAPH_NORMALIZED_MAX);Serial.print(",");
     // Serial.println();
     break;
@@ -212,7 +199,7 @@ void loop()
     Serial.println("waiting on launch pad");
 
     // flight switching code_______________
-    if ((verticalAccel > 10) || (altitude > 5))
+    if ((zAccel > 10) || (altitude > 5))
     { // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
@@ -223,110 +210,30 @@ void loop()
       }
     }
     else
+      
     {
       flightStateAdvancementTrigger = 0;
     }
     // switching code end__________________
     break;
-  case 2: // Accelerating Stage
-    // do main rocket logic here VVV
-
-    // flight switching code_______________
-    if ((verticalAccel < 0) || (timeElapsed > 2000))
-    { // tune these thresholds and statements
-      flightStateAdvancementTrigger++;
-      if (flightStateAdvancementTrigger > 3)
-      { // tune this thresholds
-        flightState++;
-        flightStateAdvancementTrigger = 0;
-      }
-    }
-    else
-    {
-      flightStateAdvancementTrigger = 0;
-    }
-    // switching code end__________________
+  case 2: // flight
     dataLogging();
-    break;
-  case 3: // Upward freefall
-    flighti++;
-    // VARIABLES
-    // Altitude
-    // Altitude Acceleration
-    // Time Elapsed
-    // Zenith
-    // Vertical Acceleration
-    // do main rocket logic here VVV
-    // Vi^2 = 2aD
-    totalDragCoef = verticalAccel / pow(altitudeV, 2);
-    if (altitude > DESIRED_APOGEE)
-    {
-      servoDragForce = 90;
-    }
-    if (flighti < 100)
-    { // servos at 0
-      servoDragForce = 0;
-      rocketDragCoefRoll.newData(totalDragCoef);
-    }
-    else if (flighti < 200)
-    { // servos at 90
-      servoDragForce = 90;
-      angularAirBreakDragCoefRoll.newData(totalDragCoef - rocketDragCoefRoll.getData());
-    }
-    else
-    {
-      servoDragForce = inverseApogee();
-    }
 
-    // flight switching code_______________
-    if ((altitudeV < 0))
-    { // tune these thresholds and statements
-      flightStateAdvancementTrigger++;
-      if (flightStateAdvancementTrigger > 3)
-      { // tune this thresholds
-        flightState++;
-        flightStateAdvancementTrigger = 0;
-      }
-    }
-    else
-    {
-      flightStateAdvancementTrigger = 0;
-    }
-    // switching code end__________________
-    dataLogging();
-    break;
-  case 4: // decent
-    // do main rocket logic here VVV
-    if (altitude < (DESIRED_FLIGHT_TIME - timeElapsed) * PARACHUTE_TERM_VELOCITY
-        || altitude < 60)
-    {
+    if (altitude > DESIRED_APOGEE){
       deployChute();
     }
-    // flight switching code_______________
-    if (((-1 < altitudeV) && (altitudeV < 1)) || (timeElapsed > 100000))
+    if (altitudeV < 0){
+      deployChute();
+    }
+    if ((millis() - startTimeStamp) > 100000)//100 sec timer
     { // tune these thresholds and statements
-      flightStateAdvancementTrigger++;
-      if (flightStateAdvancementTrigger > 3)
-      { // tune this thresholds
         flightState++;
-        flightStateAdvancementTrigger = 0;
       }
-    }
-    else
-    {
-      flightStateAdvancementTrigger = 0;
-    }
-    // switching code end__________________
-    dataLogging();
     break;
-  case 5: // on the ground yippee
-    Serial.println("Done");
-    // do whatever u want here
-    //flighti =0;
-    //flightState = 1;
+  case 3:
+    flightState = 0;//just in case yk
+    //done yippee landed
     break;
   }
-#ifdef SERVO
-  
-#endif
+
 }

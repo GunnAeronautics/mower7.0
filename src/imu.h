@@ -11,14 +11,13 @@
 #define SDA_PIN 21
 #define SCL_PIN 22
 extern Quaternion orientation;
-extern Quaternion angularSpeed;
-
+extern Quaternion bnoOrientation;
 
 extern float GyroX, GyroY, GyroZ; // deg / sec
 extern float AccX, AccY, AccZ;    // Gs
 extern float MagX, MagY, MagZ;    // Gs
 
-extern float verticalAccel; // in m/s^2
+extern float zAccel; // in m/s^2
 extern float xAccel; // in m/s^2
 extern float yAccel; // in m/s^2
 
