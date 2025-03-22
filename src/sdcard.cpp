@@ -7,6 +7,7 @@ SPIClass vspi(VSPI);
 TaskHandle_t Task1;
 QueueHandle_t xQueue;
 volatile int howManyDatas = 0;
+bool lastLED = true;
 
 String getNewLogFilename(){
   int fileIndex = 1;
@@ -31,6 +32,8 @@ void writeCSVLine(fs::FS &fs, const char *path, const char *message)
   if (file.print(message))
   {
     Serial.println("Message appended");
+    digitalWrite(2,!lastLED);
+    lastLED = !lastLED;
   }
   else
   {
@@ -40,60 +43,9 @@ void writeCSVLine(fs::FS &fs, const char *path, const char *message)
 }
 
 void sdTask(void *parameter) {
-  char receivedData[MAX_STRING_SIZE];
-  char lumpData[5000] = "";
-  int lastTsdWrite;
-  int lastWriteTTTTT;//timebetween writing
-  datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
-
-  writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
-  delay(1000);
-  while (1) {
-    if ((howManyDatas < 10)){
-      
-      if (xQueueReceive(xQueue, &receivedData,0) == pdPASS){//if theres new data in the queue
-      strcat(lumpData,receivedData);
-      howManyDatas += 1;
-      }
-      else if (howManyDatas != 0){
-        writeCSVLine(SD, logFilename.c_str(), lumpData);
-        //Serial.println(lumpData);
-        memset(lumpData, 0, sizeof(lumpData));
-        howManyDatas = 0;
-      }
-    }
-    
-    else{
-      writeCSVLine(SD, logFilename.c_str(), lumpData);
-      //Serial.println(lumpData);
-      memset(lumpData, 0, sizeof(lumpData));
-
-      howManyDatas = 0;
-    }
-    
-    // }
-    // else {
-    //   // if ((howManyDatas <= 5)){//((millis()-lastTsdWrite) < 50)||
-    //   //   continue;
-    //   // }
-    //   lastTsdWrite = millis();
-
-
-
-    //   // Serial.print("emptyLumpData datas going to upload: ");
-    //   // Serial.print(howManyDatas);
-    //   // Serial.print(" timeTakenBetweenEmpty: ");
-    //   // Serial.print(micros()-lastTsdWrite);
-
-    //   howManyDatas = 0;
-    //   //delay(70);
-      // lastWriteTTTTT = micros();
-      // delete[] zzz//reset the memory of the lumpData
-      // Serial.print("Time taken to upload: ");
-      // Serial.print(micros()-lastWriteTTTTT);
-      
-    }
-  }
+  char *message = (char *)parameter;  
+  writeCSVLine(SD, logFilename.c_str(), message);
+}
 void sdSetup()
 {
   hspi.begin(SD_SCK,SD_MISO,SD_MOSI,SD_CS);
@@ -135,18 +87,12 @@ void sdSetup()
   logFilename = getNewLogFilename();
   Serial.println(logFilename);
 
+  datalogHeader = "timeElapsed,pressure,alt,altV,xAccel,yAccel,verticalAccel,zenith,w,i,j,k,W,I,J,K,magX,magY,magZ,accX,accY,accZ,flightState\n";
+  writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
 
-  xQueue = xQueueCreate(10,MAX_STRING_SIZE);//~300 bytes per line
-  delay(1000);
-  xTaskCreatePinnedToCore(
-    sdTask,      // Function to execute
-    "Blink Task",   // Task name
-    8192,           // Stack size (in words)
-    NULL,           // Task input parameter
-    1,              // Priority (higher number = higher priority)
-    &Task1,         // Task handle
-    1               // Core 1
-  );
+
+  // xQueue = xQueueCreate(10,MAX_STRING_SIZE);//~300 bytes per line
+  // delay(1000);
 
   
   //writeCSVLine(SD, logFilename.c_str(), "Time, Baro");
@@ -163,13 +109,23 @@ void logData(String dataString)
   // char buffer[MAX_STRING_SIZE] = "";
   //if (xQueueSend(xQueue, "1", portMAX_DELAY) != pdPASS){
 // //UNDO COMMENTS BELOWO
-  #ifdef SDCARD
-  if (xQueueSend(xQueue, dataString.c_str(), 0) != pdPASS){
-    Serial.println("Queue Full! Data Lost.");
-  } 
-  #else
-  Serial.println(dataString);
-  #endif
+  // if (xQueueSend(xQueue, dataString.c_str(), 0) != pdPASS){
+  //   Serial.println("Queue Full! Data Lost.");
+  // } 
+  
+  
+  writeCSVLine(SD, logFilename.c_str(), dataString.c_str());
+  // xTaskCreatePinnedToCore(
+  //   sdTask,      // Function to execute
+  //   "Blink Task",   // Task name
+  //   8192,           // Stack size (in words)
+  //   dataString.c_str(),           // Task input parameter
+  //   1,              // Priority (higher number = higher priority)
+  //   &Task1,         // Task handle
+  //   1               // Core 1
+  
+
+  //Serial.println(dataString);
 //NOW STOP UNDO
     //Serial.println(uxQueueSpacesAvailable(xQueue));
 

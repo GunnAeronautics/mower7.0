@@ -6,7 +6,6 @@
 // #include <WiFi.h>
 // #include <BluetoothSerial.h>
 #include <Arduino.h>
-#include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <math.h>         //for inverse trig functions
 #include <quaternion.h>
@@ -54,7 +53,6 @@ int flighti = 0;                       // something advanced
 int servoDragForce = 0;                        // servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
 // webhooktest
 //  put function declarations here:
-bool lastLED = true;
 
 // RollingAverage angularRocketDragCoefRoll;
 RollingAverage rocketDragCoefRoll(40);
@@ -150,12 +148,12 @@ void setup()
   
   sdSetup();
   
-
+  servoSetup();
 #
   lastT = micros();
   Serial.println("start");
   delay(5000);
-  
+
   pinMode(2,OUTPUT);
   digitalWrite(2,HIGH);
 }
@@ -187,7 +185,7 @@ void loop()
   switch (flightState)
   {
   case 0: // happy data printing mode
-    //logData();
+    dataLogging();
     Serial.print(altitude);
     Serial.print(",");
     Serial.print(altitudeV);

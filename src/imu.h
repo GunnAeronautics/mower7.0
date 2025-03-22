@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include <quaternion.h>
 #include <Adafruit_BNO055.h>
-#define BNO_ADDRESS 0x28
+#include <Wire.h>
+
+#define BNO_ADDRESS 0x29
 #define CONFIG_MODE 0x00
 #define ACCONLY_MODE 0x01
 #define ACC_CONFIG_REGISTER 0x08

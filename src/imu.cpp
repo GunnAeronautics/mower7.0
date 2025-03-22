@@ -39,7 +39,7 @@ void writeRegister(uint8_t reg, uint8_t value) {
 void IMU_BNO055setup()
   {
     Wire.begin(SDA_PIN, SCL_PIN);
-    delay(1000);
+    delay(3000);
   
     if (!bno.begin())
     {
