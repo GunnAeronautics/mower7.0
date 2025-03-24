@@ -39,7 +39,7 @@ void writeRegister(uint8_t reg, uint8_t value) {
 void IMU_BNO055setup()
   {
     Wire.begin(SDA_PIN, SCL_PIN);
-    delay(3000);
+    delay(1000);
   
     if (!bno.begin())
     {
@@ -51,10 +51,10 @@ void IMU_BNO055setup()
     bno.setExtCrystalUse(true);
     bno.setMode(OPERATION_MODE_CONFIG);
     delay(25); // Allow sensor to stabilize
-    writeRegister(ACC_CONFIG_REGISTER, 0x0C); // Set range to ±16g
-    Serial.println("Accelerometer set to ±16g range.");
+    // writeRegister(ACC_CONFIG_REGISTER, 0x0C); // Set range to ±16g
+    // Serial.println("Accelerometer set to ±16g range.");
     // Switch to ACCONLY mode
-    bno.setMode(OPERATION_MODE_NDOF_FMC_OFF);
+    // bno.setMode(OPERATION_MODE_NDOF_FMC_OFF);
     delay(25); // Allow sensor to stabilize
 
     imu::Quaternion quat = bno.getQuat();
@@ -158,8 +158,8 @@ void IMU_BNO055setup()
     bnoOrientation.setQuat(quat.w(),quat.x(),quat.y(),quat.z());
 
     zenith = angleBetweenAxis(bnoOrientation,"Y+");
-    zAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Z+")-9.8;
-    xAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "X+");
+    //zAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Z+");
+    //xAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "X+");
     yAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Y+");
   
     //trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());

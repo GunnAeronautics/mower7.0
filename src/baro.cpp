@@ -30,7 +30,7 @@ void baroSetup()
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_32X);
   bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_100_HZ);
-  for (int i = 0; i < 120; i++)
+  for (int i = 0; i < 100; i++)
   {
     baroData(); // fill up the rolling averages
     delay(10);
@@ -61,7 +61,7 @@ void baroData(void)
   pressure = (bmp.pressure / 100.0); // hPa
   pressureRoll.newData(pressure);
   lastAltitudeBuiltIn = builtInAltitude;
-  builtInAltitude = bmp.readAltitude(groundPressure);
+  //builtInAltitude = bmp.readAltitude(groundPressure);
 }
 void altitudeProcessing(int deltaT)// in millis
 { // takes pressure data and transforms it into altitude and altitude velocity

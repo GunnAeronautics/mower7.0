@@ -1,4 +1,4 @@
-
+//made by Gunn Aero members way before me (ancients)
 #include "quaternion.h"
 
 
