@@ -25,29 +25,29 @@
 // #define SIMULATE
 #define SERVO
 
-#define DATAPRECISION 2// decimals
+#define DATAPRECISION 6// decimals
 
 #define GRAVITY 9.81              // m/s^2
 #define DESIRED_APOGEE 250        // m specified by TARC guidelines
 #define DESIRED_FLIGHT_TIME 45000 // miliseconds
 // #define PARACHUTE_DRAG_COEF 0.05//area included
 #define DRAG_FLAP_RANGE 90         // 0 for full retraction, 90 for full extension
-#define PARACHUTE_TERM_VELOCITY 10 // m/s
+#define PARACHUTE_TERM_VELOCITY 3.256 // m/s
 // #define GRAPH_NORMALIZED_MAX 1000
 
 // ground references for pressure function to work
-
+float deployed = false;
 float totalDragCoef;
 float angularRocketDragCoef = 0; // area included
 float rocketDragCoef = 0;        //
 float angularAirBreakDragCoef = 0;
-
+float numberOfNegatives = 0;
 unsigned long lastT;
 static int deltaT;
 int startTimeStamp = 0; // ms
 int timeElapsed = 0;    // time elapsed in flight (ms)
 
-int flightState = 0;                   // state of the rocket's control
+int flightState = 1;                   // state of the rocket's control
 int flightStateAdvancementTrigger = 0; // counts number of times state switching event occurs
 int flighti = 0;                       // something advanced
 int servoDragForce = 0;                        // servo angle for drag flaps, 0 for fully retracted 90 for fully extended, random variable
@@ -59,9 +59,9 @@ RollingAverage angularAirBreakDragCoefRoll(40);
 
 RollingAverage deltaTRoll(300);
 
-float predictApogee(float alt, float v, float dragCoef)
+float predictApogee(float alt, float v, float accel)
 {
-  return alt + log((dragCoef * v * v / 9.81) + 1) / (2.0 * dragCoef); // copied from mower6.0
+  return alt + log((accel / 9.81) + 1) / (2.0 * accel /v/v); // copied from mower6.0
 }
 float inverseApogee()
 { // Binary Search
@@ -71,7 +71,7 @@ float inverseApogee()
   for (int i = 0; i < 10; i++)
   {
     mid = (searchRangeL + searchRangeH) / 2.0;
-    float prediction = predictApogee(altitude, altitudeV, mid + rocketDragCoefRoll.getData());
+    float prediction = predictApogee(altitude, altitudeV, mid + 1);
 
     if (prediction < DESIRED_APOGEE)
     { // to the left of desired
@@ -115,7 +115,9 @@ void dataLogging(){
 
                       //String()
                       // // CONTROL
-                      (String)predictApogee(altitude, altitudeV, rocketDragCoef) + ',' + // apogee prediction
+                      (String)predictApogee(altitude, altitudeV, zAccel) + ',' + // apogee prediction
+                      (String)deployed + ',' +
+
                       // (String)servoDragForce + ',' +                                         // flap angle
                       // (String)solenoidState + ',' +                                      // solenoid
                       (String)flightState + ',' +                                        // flightState
@@ -131,7 +133,6 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println("Serial Begin");
-
   baroSetup();
   Serial.println("BMP390 Attached");
 
@@ -148,6 +149,7 @@ void setup()
   sdSetup();
   
   servoSetup();
+  
 #
   lastT = micros();
   Serial.println("start");
@@ -188,7 +190,7 @@ void loop()
     // Serial.print(deltaT);Serial.print(",");
 
     
-    Serial.print(zAccel-9.8);Serial.print(",");
+    Serial.print(predictApogee(altitude,altitudeV,zAccel));Serial.print(",");
     Serial.println();
 
     // Serial.print(pressure/pressureMax*GRAPH_NORMALIZED_MAX);Serial.print(",");
@@ -219,19 +221,39 @@ void loop()
   case 2: // flight
     dataLogging();
 
-    if (altitude > DESIRED_APOGEE){
+    // d = vt
+    if ((DESIRED_FLIGHT_TIME - timeElapsed * PARACHUTE_TERM_VELOCITY) > altitude ){//main logic
       deployChute();
     }
+    
+    if (altitude > 150){
+      moveFlaps(90);
+    }
+    else{
+      moveFlaps(0);
+    }
+    
     if (altitudeV < 0){
-      deployChute();
+      numberOfNegatives ++;
     }
+    else {
+      numberOfNegatives = 0;
+    }
+    
+    if ((numberOfNegatives > 50)&&(altitude < 50.)){//saftey (falling down and altitude less than 50)
+      deployChute();
+      deployed = true;
+
+    }
+ 
+  
     if ((millis() - startTimeStamp) > 100000)//100 sec timer
     { // tune these thresholds and statements
         flightState++;
       }
-    break;
+    break;    
   case 3:
-    flightState = 0;//just in case yk
+    flightState = 1;//just in case yk
     //done yippee landed
     break;
   }

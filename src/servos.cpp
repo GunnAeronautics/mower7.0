@@ -19,11 +19,11 @@ Servo servo3; // create servo
 Servo servo4; // create servo
 
 int angleToBlink(double power){// scale of 0 to 90
-    return 180 - (int)power;//tony rocket method
+    return 135 -(int)power;//tony rocket method
   }
 
 void deployChute(){
-    servo1.write(90);
+    servo1.write(170);
   }
 void moveFlaps(int power){
     servo2.write(angleToBlink(power));
@@ -39,7 +39,7 @@ void servoSetup(){
     Serial.println("Servo Attached");
 
 
-    for (int i = 90; i < 180; i++)
+    for (int i = 45; i < 135; i++)
     {
       servo2.write(i);
       servo3.write(i);
@@ -47,14 +47,14 @@ void servoSetup(){
   
       delay(10);
     }
-    for (int i = 180; i > 90; i--)
+    for (int i = 135; i > 45; i--)
     {
       servo2.write(i);
       servo3.write(i);
       servo4.write(i);
       delay(10);
     }
-    servo1.write(180);
+    servo1.write(10);
     servo2.write(angleToBlink(0));
     servo3.write(angleToBlink(0));
     servo4.write(angleToBlink(0));

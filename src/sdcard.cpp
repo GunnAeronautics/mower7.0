@@ -31,7 +31,7 @@ void writeCSVLine(fs::FS &fs, const char *path, const char *message)
   }
   if (file.print(message))
   {
-    Serial.println("Message appended");
+    //Serial.println("Message appended");
     digitalWrite(2,!lastLED);
     lastLED = !lastLED;
   }
