@@ -158,9 +158,9 @@ void IMU_BNO055setup()
     bnoOrientation.setQuat(quat.w(),quat.x(),quat.y(),quat.z());
 
     zenith = angleBetweenAxis(bnoOrientation,"Y+");
-    //zAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Z+");
+    zAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Z+");
     //xAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "X+");
-    yAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Y+");
+    //yAccel = axisComponent(bnoOrientation, accel.x(), accel.y(), accel.z(), "Y+");
   
     //trueAngle = magAngle(orientation, mag.x(), mag.y(), mag.z());
 
@@ -168,7 +168,7 @@ void IMU_BNO055setup()
     MagY = mag.y();
     MagZ = mag.z();
     AccX = accel.x();
-    AccY = accel.y();
+    AccY = -accel.y();
     AccZ = accel.z();
   
     // Serial.print(zenith);

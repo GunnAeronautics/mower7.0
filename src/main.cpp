@@ -42,7 +42,7 @@ bool parachuteDeployed = false;
 
 //states & triggers
 //VVV (IMPORTANT) set 0 for testing logging data, 1 for arming the rocket 
-int flightState = 0;                   // state of the rocket's control
+int flightState = 1;                   // state of the rocket's control
 int flightStateAdvancementTrigger = 0; // counts number of times state switching event occurs
 int flapDeploymentTrigger = 0; //counts # of times yyou should deploy flaps
 int numberOfNegatives = 0;
@@ -128,8 +128,8 @@ void loop()
   case 0: // happy data printing mode
     dataLogging();
   
-    Serial.print(altitude);Serial.print(",");
-    Serial.print(altitudeV);Serial.print(",");
+    // Serial.print(zAccel);Serial.print(",");
+    // Serial.print(AccY);Serial.print(",");
     Serial.println();
     break;
 
