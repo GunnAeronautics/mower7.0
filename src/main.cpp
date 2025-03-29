@@ -35,6 +35,7 @@ unsigned long lastT;
 static int deltaT;
 int startTimeStamp = 0; // ms
 int timeElapsed = 0;    // time elapsed in flight (ms)
+int lastMovementT = 0;//ms
 
 //deployment states
 bool dragFlapDeployed = false;
@@ -66,7 +67,9 @@ float predictApogee(float alt, float v, float dragCoef)
 {
   return alt + log((dragCoef * v * v / 9.81) + 1) / (2.0 * dragCoef); // copied from mower6.0
 }
-
+float predictApogeeIdeal(float alt, float v){
+  return alt + pow(v,2)/2./GRAVITY;
+}
 void dataLogging(){
   String dataString = String(timeElapsed) + ',' +   // rocket flight time
                       String(pressure,DATAPRECISION) + ',' +      // pressure
@@ -114,6 +117,8 @@ void setup()
 }
 
 
+
+
 void loop()
 {
   //get data stuff
@@ -157,40 +162,51 @@ void loop()
     break;
   case 2: // flight
     dataLogging();
-
-    // d = vt
-    if ((DESIRED_FLIGHT_TIME - timeElapsed) * PARACHUTE_TERM_VELOCITY > altitude ){//main logic works!!!
-      deployChute();
-    }
     
     if (altitudeV < 0){numberOfNegatives ++;}
     else {numberOfNegatives = 0;}
-    
-    if (((numberOfNegatives > 50)||(timeElapsed > 10000))&&(altitude < 20.)){//saftey (falling down and altitude less than 20)
-      deployChute();
-      parachuteDeployed = true;
+
+    if ((numberOfNegatives > 10)||(timeElapsed > 10000)){//FALLING DOWN
+
+      if ((DESIRED_FLIGHT_TIME - timeElapsed) * PARACHUTE_TERM_VELOCITY > altitude ){//main logic works!!!
+        deployChute();
+      }
+
+      if (altitude < 20.){//saftey (falling down and altitude less than 20)
+        deployChute();
+        parachuteDeployed = true;
+      }
+
 
     }
-    else{
-
-    if ((AccY < 0) && (AccY > -7)){//then u are inside of the freefall upward
-      if (predictApogee(altitude,altitudeV,COEF_DRAG_FLAPDEPLOYED) < DESIRED_APOGEE){
-        flapDeploymentTrigger ++;
+    else{//GOING UP
+      if (lastMovementT + 500 > millis()){
+      if (predictApogeeIdeal(altitude, altitudeV) < DESIRED_APOGEE){//cooked
+        moveFlaps(0);
       }
       else{
-        flapDeploymentTrigger = 0;
+      if ((AccY < 0) && (AccY > -7)){//then u are inside of the freefall upward
+        if (predictApogee(altitude,altitudeV,COEF_DRAG_FLAPDEPLOYED) < DESIRED_APOGEE){
+          flapDeploymentTrigger ++;
+        }
+        else{
+          flapDeploymentTrigger = 0;
+        }
+      }
+      if (flapDeploymentTrigger >= 3) {
+        moveFlaps(90);
+        dragFlapDeployed = true;
+        lastMovementT = millis();
+      }
+      else{
+        moveFlaps(0);
+        dragFlapDeployed = false;
+      }
+
       }
     }
-    if (flapDeploymentTrigger >= 3) {
-      moveFlaps(90);
-      dragFlapDeployed = true;
 
-    }
-    else{
-      moveFlaps(0);
-      dragFlapDeployed = false;
-    }
-  
+
     if ((millis() - startTimeStamp) > 100000)//100 sec timer
     {
         flightState++;
