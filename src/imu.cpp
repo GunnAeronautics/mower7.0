@@ -168,7 +168,7 @@ void IMU_BNO055setup()
     MagY = mag.y();
     MagZ = mag.z();
     AccX = accel.x();
-    AccY = -accel.y();
+    AccY = accel.y();
     AccZ = accel.z();
   
     // Serial.print(zenith);

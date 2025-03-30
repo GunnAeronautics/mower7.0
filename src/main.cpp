@@ -122,6 +122,7 @@ void setup()
 void loop()
 {
   //get data stuff
+  timeStuff();
   baroData();
   altitudeProcessing(deltaT);
   IMUdata(deltaT);
@@ -133,8 +134,8 @@ void loop()
   case 0: // happy data printing mode
     dataLogging();
   
-    // Serial.print(zAccel);Serial.print(",");
-    // Serial.print(AccY);Serial.print(",");
+    Serial.print(zAccel);Serial.print(",");
+    Serial.print(AccY);Serial.print(",");
     Serial.println();
     break;
 
@@ -143,7 +144,7 @@ void loop()
     Serial.println("waiting on launch pad");
 
     // flight switching code_______________
-    if ((zAccel > 10) || (altitude > 5))
+    if ((zAccel > 15) || (altitude > 5))
     { // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
