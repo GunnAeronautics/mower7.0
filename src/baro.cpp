@@ -1,6 +1,6 @@
 #include <baro.h>
 
-RollingAverage pressureRoll(8);
+RollingAverage pressureRoll(4);
 RollingAverage temperatureRoll(8);
 RollingAverage altitudeVRoll(10);
 RollingAverage altitudeBuiltInVRoll(10);

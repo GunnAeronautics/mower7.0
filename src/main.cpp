@@ -33,8 +33,8 @@
 //time
 unsigned long lastT;
 static int deltaT;
-int startTimeStamp = 0; // ms
-int timeElapsed = 0;    // time elapsed in flight (ms)
+unsigned long startTimeStamp = 0; // ms
+long timeElapsed = 0;    // time elapsed in flight (ms)
 int lastMovementT = 0;//ms
 
 //deployment states
@@ -53,7 +53,7 @@ void timeStuff(){
   deltaT = micros() - lastT;//deltaT
   lastT = micros();
   //to set a timer for when the rocket launches
-  if ((startTimeStamp = 0) && (flightState != 0))
+  if ((startTimeStamp == 0) && (flightState != 0))
   {
     timeElapsed = 0;
   }
@@ -70,15 +70,20 @@ float predictApogee(float alt, float v, float dragCoef)
 float predictApogeeIdeal(float alt, float v){
   return alt + pow(v,2)/2./GRAVITY;
 }
+float coefOfDrag(float accel,float v){
+  float coef = abs(accel/v/v);
+  return coef;
+}
 void dataLogging(){
   String dataString = String(timeElapsed) + ',' +   // rocket flight time
                       String(pressure,DATAPRECISION) + ',' +      // pressure
                       String(altitude,DATAPRECISION) + ',' +      // alt
                       String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
-                      String(zAccel,DATAPRECISION) + ',' +
-                      String(AccY,DATAPRECISION) + ',' +
+                      String(zAccel,DATAPRECISION) + ',' +//global axis
+                      String(AccY,DATAPRECISION) + ',' +//local axis
                       String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
-                      String(predictApogee(altitude, altitudeV, COEF_DRAG_FLAPDEPLOYED),DATAPRECISION) + ',' + // apogee prediction
+                      String(predictApogee(altitude, altitudeV, coefOfDrag(AccY,altitudeV)),DATAPRECISION) + ',' + // apogee prediction
+                      String(coefOfDrag(AccY,altitudeV)) + ',' + 
                       (String)parachuteDeployed + ',' +
                       (String)dragFlapDeployed + ',' + 
                       (String)flightState + ',' + 
@@ -118,7 +123,48 @@ void setup()
 
 
 
+void downwardLogic(){
+  if (((float(DESIRED_FLIGHT_TIME - timeElapsed)/1000) * PARACHUTE_TERM_VELOCITY) > altitude ){//main logic works!!!
+    deployChute();
+    parachuteDeployed = true;
+  }
+  if (altitude < 20.){//saftey (falling down and altitude less than 20)
+    deployChute();
+    parachuteDeployed = true;
+  }
+}
+void upwardLogic(){
+  if (lastMovementT + 400 < millis()){
+    if ((predictApogeeIdeal(altitude, altitudeV) < DESIRED_APOGEE)){//cooked
+      moveFlaps(0);
+      dragFlapDeployed = false;
+    }
+    else{
+    if (altitude > DESIRED_APOGEE){//cooked
+      moveFlaps(90);
+      dragFlapDeployed = true;
+    }
+    if ((AccY < 0) && (AccY > -10)){//then u are inside of the freefall upward
+      if (predictApogee(altitude,altitudeV,coefOfDrag(zAccel,altitudeV)) > DESIRED_APOGEE){
+        flapDeploymentTrigger ++;
+      }
+      else{
+        flapDeploymentTrigger = 0;
+      }
+    }
+    if (flapDeploymentTrigger >= 3) {
+      moveFlaps(90);
+      dragFlapDeployed = true;
+      lastMovementT = millis();
+    }
+    else{
+      moveFlaps(0);
+      dragFlapDeployed = false;
+    }
 
+    }
+  }
+}
 void loop()
 {
   //get data stuff
@@ -144,78 +190,40 @@ void loop()
     Serial.println("waiting on launch pad");
 
     // flight switching code_______________
-    if ((zAccel > 15) || (altitude > 5))
-    { // tune these thresholds and statements
+    if ((zAccel > 15) || (altitude > 5)){ // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
       { // tune this thresholds
-        flightState++;
-        flightStateAdvancementTrigger = 0;
         startTimeStamp = millis(); // start the flight timer here
+
+        flightState++;
       }
     }
-    else
-      
-    {
-      flightStateAdvancementTrigger = 0;
-    }
+
+    else{flightStateAdvancementTrigger = 0;}
     // switching code end__________________
     break;
   case 2: // flight
     dataLogging();
-    
+    Serial.print(timeElapsed);
+    Serial.print(",");
+    Serial.println(startTimeStamp);
     if (altitudeV < 0){numberOfNegatives ++;}
     else {numberOfNegatives = 0;}
 
     if ((numberOfNegatives > 10)||(timeElapsed > 10000)){//FALLING DOWN
-
-      if ((DESIRED_FLIGHT_TIME - timeElapsed) * PARACHUTE_TERM_VELOCITY > altitude ){//main logic works!!!
-        deployChute();
-      }
-
-      if (altitude < 20.){//saftey (falling down and altitude less than 20)
-        deployChute();
-        parachuteDeployed = true;
-      }
-
-
+      downwardLogic();
     }
     else{//GOING UP
-      if (lastMovementT + 500 > millis()){
-      if (predictApogeeIdeal(altitude, altitudeV) < DESIRED_APOGEE){//cooked
-        moveFlaps(0);
-      }
-      else{
-      if ((AccY < 0) && (AccY > -7)){//then u are inside of the freefall upward
-        if (predictApogee(altitude,altitudeV,COEF_DRAG_FLAPDEPLOYED) < DESIRED_APOGEE){
-          flapDeploymentTrigger ++;
-        }
-        else{
-          flapDeploymentTrigger = 0;
-        }
-      }
-      if (flapDeploymentTrigger >= 3) {
-        moveFlaps(90);
-        dragFlapDeployed = true;
-        lastMovementT = millis();
-      }
-      else{
-        moveFlaps(0);
-        dragFlapDeployed = false;
-      }
-
-      }
+      upwardLogic();
     }
 
 
-    if ((millis() - startTimeStamp) > 100000)//100 sec timer
+    if (timeElapsed > 100000)//100 sec timer
     {
         flightState++;
       }
     break;    
-    
-    }
-
   case 3:
     flightState = 1;//just in case yk
     //done yippee landed
