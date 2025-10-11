@@ -10,7 +10,7 @@ Quaternion bnoOrientation;
 float GyroX, GyroY, GyroZ; // deg / sec
 float AccX, AccY, AccZ;    // Gs
 float MagX, MagY, MagZ;    // Gs
-
+uint8_t systemCali,gyroCali,accelCali,magCali;
 float zAccel; // in m/s^2
 float xAccel; // in m/s^2
 float yAccel; // in m/s^2
@@ -97,6 +97,8 @@ void IMU_BNO055setup()
   
   
   float axisComponent(Quaternion newOrientation, float x, float y, float z, String dir ){
+    newOrientation.normalize();
+
     Quaternion quatVector(0, x, y, z);
     Quaternion copy = newOrientation;
     newOrientation.mult(quatVector);
@@ -112,6 +114,7 @@ void IMU_BNO055setup()
   }
   float verticalAcceleration(Quaternion newOrientation, float accelX, float accelY, float accelZ)
   {
+    newOrientation.normalize();
     Quaternion accel(0, accelX, accelY, accelZ);
     Quaternion copy = newOrientation;
     newOrientation.mult(accel);
@@ -167,10 +170,11 @@ void IMU_BNO055setup()
     MagX = mag.x();
     MagY = mag.y();
     MagZ = mag.z();
+
     AccX = accel.x();
-    AccY = accel.y();
+    AccY = -accel.y();//put negative side if servos are on top
     AccZ = accel.z();
-  
+    bno.getCalibration(&systemCali,&gyroCali,&accelCali,&magCali);
     // Serial.print(zenith);
     // Serial.print(", ");
     // Serial.print(verticalAccel);

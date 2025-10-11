@@ -34,6 +34,7 @@ extern float bnoW;
 extern float bnoI;
 extern float bnoJ;
 extern float bnoK;
+extern uint8_t systemCali,gyroCali,accelCali,magCali;
 
 void writeRegister(uint8_t reg, uint8_t value);
 void IMU_BNO055setup();

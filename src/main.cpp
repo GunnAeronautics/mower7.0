@@ -8,6 +8,7 @@
 #include <imu.h>
 #include <sdcard.h>
 #include <servos.h>
+#include "KalmanVelocityEstimator.h"
 
 #define GRAVITY 9.81              // m/s^2 hmm I wonder what that is
 
@@ -43,10 +44,11 @@ bool parachuteDeployed = false;
 
 //states & triggers
 //VVV (IMPORTANT) set 0 for testing logging data, 1 for arming the rocket 
-int flightState = 1;                   // state of the rocket's control
+int flightState = 0;                   // state of the rocket's control
 int flightStateAdvancementTrigger = 0; // counts number of times state switching event occurs
 int flapDeploymentTrigger = 0; //counts # of times yyou should deploy flaps
 int numberOfNegatives = 0;
+KalmanVelocityEstimator kalman(1, 3);
 
 //everything related to timing
 void timeStuff(){
@@ -92,7 +94,7 @@ void dataLogging(){
 }
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
   Serial.println("Serial Begin");
 
   baroSetup();
@@ -118,7 +120,6 @@ void setup()
   digitalWrite(2,HIGH);
 
   delay(5000);
-
 }
 
 
@@ -165,6 +166,9 @@ void upwardLogic(){
     }
   }
 }
+float accelVelo = 0;
+float predAlt = 0;
+float error;
 void loop()
 {
   //get data stuff
@@ -178,10 +182,26 @@ void loop()
   switch (flightState)
   {
   case 0: // happy data printing mode
-    dataLogging();
+    // dataLogging();
   
-    Serial.print(zAccel);Serial.print(",");
-    Serial.print(AccY);Serial.print(",");
+    accelVelo += (zAccel-9.8) * deltaT / 1000000;
+    error = altitude - predAlt;
+    accelVelo += error / deltaT*1000000 * 0.1;
+    predAlt = altitude + accelVelo *deltaT/1000000;
+    
+    Serial.print(accelVelo);Serial.print(",");
+
+    Serial.print(altitudeV);Serial.print(",");
+    Serial.print(AccZ-9.8);Serial.print(",");
+    // Serial.print(String(AccX,DATAPRECISION));Serial.print(",");
+    // Serial.print(String(AccY,DATAPRECISION));Serial.print(",");
+    Serial.print(systemCali);Serial.print(",");
+    Serial.print(accelCali);Serial.print(",");
+    Serial.print(gyroCali);Serial.print(",");
+    Serial.print(magCali);Serial.print(",");
+
+    // Serial.print(String(9.8-zAccel,DATAPRECISION));Serial.print(",");
+    
     Serial.println();
     break;
 
@@ -190,7 +210,7 @@ void loop()
     Serial.println("waiting on launch pad");
 
     // flight switching code_______________
-    if ((zAccel > 15) || (altitude > 5)){ // tune these thresholds and statements
+    if ((altitude > 10)){ // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
       { // tune this thresholds
