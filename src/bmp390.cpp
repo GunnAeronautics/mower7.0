@@ -1,10 +1,13 @@
-#include <baro.h>
+#include <bmp390.h>
 
 RollingAverage pressureRoll(4);
 RollingAverage temperatureRoll(8);
 RollingAverage altitudeVRoll(10);
 RollingAverage altitudeBuiltInVRoll(10);
-Adafruit_BMP3XX bmp;
+Adafruit_BMP3XX bmp390;
+Adafruit_BMP5xx bmp580;
+SPIClass mySPI;
+
 
 float pressure, temperature; // Pa C
 float lastAltitude, lastAltitudeBuiltIn;
@@ -15,10 +18,16 @@ float groundTemperature, groundPressure, altitude, builtInAltitude; // alt in me
 float altitudeBuiltInV;
 void baroSetup()
 {
+  mySPI.begin(BMP_SCK, BMP_MISO, BMP_MOSI);
+
   // SPI
-  while (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI))
+  while (!bmp390.begin_SPI(BMP390_CS, BMP_SCK, BMP_MISO, BMP_MOSI))
   { // hardware SPI mode
-    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
+    Serial.println("Could not find a valid BMP390 sensor, check wiring!");
+  }
+  while (!bmp580.begin(BMP580_CS, &mySPI))
+  { // hardware SPI mode
+    Serial.println("Could not find a valid BMP580 sensor, check wiring!");
   }
   // I2C
   //  if (!bmp.begin_I2C(0x77)) {
@@ -27,9 +36,9 @@ void baroSetup()
   //    }
 
   //bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_1X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_32X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_100_HZ);
+  bmp390.setPressureOversampling(BMP3_OVERSAMPLING_32X);
+  bmp390.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp390.setOutputDataRate(BMP3_ODR_100_HZ);
   for (int i = 0; i < 100; i++)
   {
     baroData(); // fill up the rolling averages
@@ -49,19 +58,22 @@ void baroData(void)
   pressure = pressureFunction();
   return
 #endif
-      if (!bmp.performReading())
+      if (!bmp390.performReading())
   {
     Serial.println("BMP390 Failed to perform reading :(");
     return;
   }
 
-  temperature = bmp.temperature; // C
+  temperature = bmp390.temperature; // C
   temperatureRoll.newData(temperature);
 
-  pressure = (bmp.pressure / 100.0); // hPa
+  pressure = (bmp390.pressure / 100.0); // hPa
   pressureRoll.newData(pressure);
   lastAltitudeBuiltIn = builtInAltitude;
   //builtInAltitude = bmp.readAltitude(groundPressure);
+  Serial.println("BMP390: " + (String)bmp390.pressure);
+  Serial.println("BMP580: " + (String)bmp580.pressure);
+
 }
 void altitudeProcessing(int deltaT)// in millis
 { // takes pressure data and transforms it into altitude and altitude velocity

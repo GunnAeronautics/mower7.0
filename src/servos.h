@@ -4,4 +4,5 @@
 void deployChute();
 void moveFlaps(int power);
 void servoSetup();
+void undeployChute();
 

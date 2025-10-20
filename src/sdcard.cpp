@@ -4,8 +4,8 @@ String logFilename;
 String datalogHeader;
 SPIClass hspi(HSPI);
 SPIClass vspi(VSPI);
-TaskHandle_t Task1;
-QueueHandle_t xQueue;
+// TaskHandle_t Task1;
+// QueueHandle_t xQueue;
 volatile int howManyDatas = 0;
 bool lastLED = true;
 
@@ -42,15 +42,15 @@ void writeCSVLine(fs::FS &fs, const char *path, const char *message)
   file.close();
 }
 
-void sdTask(void *parameter) {
-  char *message = (char *)parameter;  
-  writeCSVLine(SD, logFilename.c_str(), message);
-}
+// void sdTask(void *parameter) {
+//   char *message = (char *)parameter;  
+//   writeCSVLine(SD, logFilename.c_str(), message);
+// }
 void sdSetup()
 {
-  hspi.begin(SD_SCK,SD_MISO,SD_MOSI,SD_CS);
+  vspi.begin(SD_SCK,SD_MISO,SD_MOSI,SD_CS);
 
-  if (!SD.begin(SD_CS, hspi))
+  if (!SD.begin(SD_CS, vspi))
   {
     Serial.println("Card Mount Failed");
     return;

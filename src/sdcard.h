@@ -2,10 +2,10 @@
 #include <SD.h>
 #include <Arduino.h>
 #include <SPI.h>
-#define SD_SCK 15
-#define SD_MISO 4
-#define SD_MOSI 17
-#define SD_CS 16
+#define SD_SCK 18
+#define SD_MISO 19
+#define SD_MOSI 23
+#define SD_CS 5
 #define MAX_STRING_SIZE 300
 
 
