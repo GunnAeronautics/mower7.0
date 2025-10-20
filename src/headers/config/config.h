@@ -9,14 +9,16 @@
 #define BMP_SCK 23
 #define BMP_MISO 19
 #define BMP_MOSI 18
-#define BMP390_CS 5
-#define BMP580_CS 4
+#define BMP390_CS 27
+#define BMP580_CS 33
 
-// ADXL343 Accelerometer Pins
-#define ADXL343_SCK 13
+// ADXL343 Accelerometer Pins, -- uses i2c now
+/*#define ADXL343_SCK 13
 #define ADXL343_MISO 12
 #define ADXL343_MOSI 11
-#define ADXL343_CS 10
+#define ADXL343_CS 10*/
+#define ADXL343_SCL 22
+#define ADXL343_SDA 21
 
 // BNO055 IMU I2C Configuration
 #define BNO_ADDRESS 0x29
