@@ -1,17 +1,16 @@
-#include <servos.h>
+#include "headers/utils/servos.h"
+#include "headers/config/config.h"
+
 float minServo1 = 0;
 float maxServo1 = 100;
 
-#define SERVO1_PIN 13//45 is unarmed, 135 is release parachute
+#define SERVO1_PIN 13 // 45 is unarmed, 135 is release parachute
 #define SERVO2_PIN 27
 #define SERVO3_PIN 26
 #define SERVO4_PIN 25
 
-#define MIN_FLAP_STATE 0//angle for minimum flap
-#define MAX_FLAP_STATE 90//angle for max flaps
-
-#define PARACHUTE_UNDEPLOYED_STATE 135
-#define PARACHUTE_DEPLOYED_STATE 45
+#define MIN_FLAP_STATE 0  // angle for minimum flap
+#define MAX_FLAP_STATE 90 // angle for max flaps
 
 Servo servo1; // create servo
 Servo servo2; // create servo

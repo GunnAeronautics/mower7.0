@@ -1,23 +1,17 @@
+#ifndef BMP390_H
+#define BMP390_H
 
-#include <Adafruit_BMP3xx.h>
-#include "Adafruit_BMP5xx.h"
-
-#include "RollingAverage.h"
+#include <Adafruit_BMP3XX.h>
+#include <Adafruit_BMP5xx.h>
+#include "../config/config.h"
+#include "../utils/RollingAverage.h"
 
 extern RollingAverage pressureRoll;
 extern RollingAverage temperatureRoll;
 extern RollingAverage altitudeVRoll;
 extern RollingAverage altitudeBuiltInVRoll;
 
-#define BMP_SCK 23
-#define BMP_MISO 19
-#define BMP_MOSI 18
-#define BMP390_CS 5
-#define BMP580_CS 4
-
-#define GRAVITY 9.81
-
-extern float pressure, temperature; // Pa C
+extern float pressure, temperature; // Pa, C
 extern float lastAltitude, lastAltitudeBuiltIn;
 extern float altitudeV;     // in m/s
 
@@ -29,3 +23,5 @@ void baroSetup();
 void altitudeProcessing(int deltaT);
 void baroData();
 float pressToAlt(float pres);
+
+#endif // BMP390_H

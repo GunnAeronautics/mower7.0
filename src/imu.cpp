@@ -1,7 +1,4 @@
-
-
-
-#include <imu.h>
+#include "headers/sensors/imu.h"
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55, BNO_ADDRESS, &Wire);
 Quaternion orientation;
@@ -11,9 +8,9 @@ float GyroX, GyroY, GyroZ; // deg / sec
 float AccX, AccY, AccZ;    // Gs
 float MagX, MagY, MagZ;    // Gs
 uint8_t systemCali,gyroCali,accelCali,magCali;
-float zAccel; // in m/s^2
-float xAccel; // in m/s^2
-float yAccel; // in m/s^2
+extern double zAccel; // in m/s^2
+extern double xAccel; // in m/s^2
+extern double yAccel; // in m/s^2
 
 float heading;        // in radians
 float zenith;        // in radians

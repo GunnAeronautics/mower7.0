@@ -1,9 +1,10 @@
 #ifndef QUATERNION_H
 #define QUATERNION_H
 
-#include <arduino.h>
+#include <Arduino.h>
+#include "../config/config.h"
 
-class Quaternion{
+class Quaternion {
   public:
     float w;
     float i;
@@ -26,4 +27,4 @@ class Quaternion{
     Quaternion copy();
 };
 
-#endif
+#endif // QUATERNION_H

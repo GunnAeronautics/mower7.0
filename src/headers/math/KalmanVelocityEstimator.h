@@ -1,6 +1,8 @@
 #ifndef KALMAN_VELOCITY_ESTIMATOR_H
 #define KALMAN_VELOCITY_ESTIMATOR_H
 
+#include "../config/config.h"
+
 class KalmanVelocityEstimator {
 private:
     float processVar; // Process noise (model uncertainty)
@@ -17,7 +19,7 @@ public:
     KalmanVelocityEstimator(float processVar, float sensorVar);
 
     // Update with new acceleration and altitude measurement
-    float update(float accel, float measuredAltitude,float dt);
+    float update(float accel, float measuredAltitude, float dt);
 
     // Getters
     float getAltitude() const;

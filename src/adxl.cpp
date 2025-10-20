@@ -1,4 +1,9 @@
-#include "adxl.h"
+#include "headers/sensors/adxl.h"
+
+//initialize global variables
+extern double xAccel = 0.0;
+extern double yAccel = 0.0;
+extern double zAccel = 0.0;
 
 /* Assign a unique ID to this sensor at the same time */
 /* Uncomment following line for default Wire bus      */

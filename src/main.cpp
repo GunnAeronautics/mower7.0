@@ -3,50 +3,41 @@
 // use ALLCAPS and UNDER_SCORES for definitions 
 #include <Arduino.h>
 #include <math.h>
-//homebrew libraries:
-#include <bmp390.h>
-#include <imu.h>
-#include <sdcard.h>
-#include <servos.h>
-#include "KalmanVelocityEstimator.h"
-#include "adxl.h"
-#define GRAVITY 9.81              // m/s^2 hmm I wonder what that is
 
+// Configuration and constants
+#include "headers/config/config.h"
 
-//"aim for the body and you'll miss, aim for the chest and you'll hit -Tony"
-#define DESIRED_APOGEE 240.792        // m  790 ft specified by TARC guidelines
-#define DESIRED_FLIGHT_TIME 42500 // miliseconds 41-44 sec regulation 2025 
+// Homebrew libraries:
+#include "headers/sensors/bmp390.h"
+#include "headers/sensors/imu.h"
+#include "headers/sensors/adxl.h"
+#include "headers/utils/sdcard.h"
+#include "headers/utils/servos.h"
+#include "headers/math/KalmanVelocityEstimator.h"
 
-//THESE NEED TO BE SET
-#define PARACHUTE_TERM_VELOCITY 3.256 // m/s
-#define COEF_DRAG_FLAPDEPLOYED 0.002213 //accelY / v / v   of the rocket when drag flaps are fully deployed
+// Last tuned before 2nd launch 3/22/25 pls don't make the servo horns slip or ur gonna have to do ts again
+// Servo deployment angles configured in config.h:
+//   - Drag flaps deployed: 45°
+//   - Drag flaps undeployed: 135°
+//   - Parachute deployed: 170°
+//   - Parachute undeployed: 10°
 
-//last tuned before 2nd launch 3/22/25 pls don't make the servo horns slip or ur gonna have to do ts again
-
-//drag flaps deployed angle: 45
-//drag flaps undeployed angle: 135
-
-//parachute deployed angle: 170
-//parachute undeployed angle: 10
-
-#define DATAPRECISION 4// decimals for sd card printing
-
-//time
+// Time variables
 unsigned long lastT;
 static int deltaT;
 unsigned long startTimeStamp = 0; // ms
 long timeElapsed = 0;    // time elapsed in flight (ms)
-int lastMovementT = 0;//ms
+int lastMovementT = 0;   // ms
 
-//deployment states
+// Deployment states
 bool dragFlapDeployed = false;
 bool parachuteDeployed = false;
 
-//states & triggers
-//VVV (IMPORTANT) set 0 for testing logging data, 1 for arming the rocket 
+// States & triggers
+// VVV (IMPORTANT) set 0 for testing logging data, 1 for arming the rocket 
 int flightState = 1;                   // state of the rocket's control
 int flightStateAdvancementTrigger = 0; // counts number of times state switching event occurs
-int flapDeploymentTrigger = 0; //counts # of times yyou should deploy flaps
+int flapDeploymentTrigger = 0;         // counts # of times you should deploy flaps
 int numberOfNegatives = 0;
 KalmanVelocityEstimator kalman(1, 3);
 

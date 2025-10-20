@@ -1,4 +1,4 @@
-#include <bmp390.h>
+#include "headers/sensors/bmp390.h"
 
 RollingAverage pressureRoll(4);
 RollingAverage temperatureRoll(8);
