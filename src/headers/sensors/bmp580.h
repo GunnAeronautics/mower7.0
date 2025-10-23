@@ -1,7 +1,7 @@
-#ifndef BMP390_H
-#define BMP390_H
+#ifndef BMP580_H
+#define BMP580_H
 
-#include <Adafruit_BMP3XX.h>
+#include <Adafruit_BMP5xx.h>
 #include "../config/config.h"
 #include "../utils/RollingAverage.h"
 
@@ -14,7 +14,7 @@ extern float pressure, temperature; // Pa, C
 extern float lastAltitude, lastAltitudeBuiltIn;
 extern float altitudeV;     // in m/s
 
-extern float groundTemperature, groundPressure, altitude, builtInAltitude; // alt in meters
+//extern float groundTemperature, groundPressure, altitude, builtInAltitude; // alt in meters
 
 extern float altitudeBuiltInV;
 
@@ -23,4 +23,4 @@ void altitudeProcessing(int deltaT);
 void baroData();
 float pressToAlt(float pres);
 
-#endif // BMP390_H
+#endif // BMP580_H

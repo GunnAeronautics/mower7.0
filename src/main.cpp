@@ -8,7 +8,7 @@
 #include "headers/config/config.h"
 
 // Homebrew libraries:
-#include "headers/sensors/bmp390.h"
+#include "headers/sensors/bmpxxx.h"
 #include "headers/sensors/imu.h"
 #include "headers/sensors/adxl.h"
 #include "headers/utils/sdcard.h"
@@ -68,15 +68,16 @@ float coefOfDrag(float accel,float v){
   return coef;
 }
 void dataLogging(){
+  BaroData baro = getBaroData();
   String dataString = String(timeElapsed) + ',' +   // rocket flight time
-                      String(pressure,DATAPRECISION) + ',' +      // pressure
-                      String(altitude,DATAPRECISION) + ',' +      // alt
-                      String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
+                      String(baro.pressure,DATAPRECISION) + ',' +      // pressure
+                      String(baro.altitude,DATAPRECISION) + ',' +      // alt
+                      String(baro.altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
                       String(zAccel,DATAPRECISION) + ',' +//global axis
                       String(AccY,DATAPRECISION) + ',' +//local axis
                       String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
-                      String(predictApogee(altitude, altitudeV, coefOfDrag(AccY,altitudeV)),DATAPRECISION) + ',' + // apogee prediction
-                      String(coefOfDrag(AccY,altitudeV)) + ',' + 
+                      String(predictApogee(baro.altitude, baro.altitudeV, coefOfDrag(AccY,baro.altitudeV)),DATAPRECISION) + ',' + // apogee prediction
+                      String(coefOfDrag(AccY,baro.altitudeV)) + ',' + 
                       (String)parachuteDeployed + ',' +
                       (String)dragFlapDeployed + ',' + 
                       (String)flightState + ',' + 
@@ -89,21 +90,21 @@ void setup()
   Serial.println("Serial Begin");
 
   baroSetup();
-  Serial.println("BMP390 Attached");
+  Serial.println("Barometric Sensor Setup Complete");
 
   // IMU_BNO055setup();
   // Serial.println("BNO055 Attached");
   adxlSetup();
-  Serial.println("Ground Pressure " + (String)groundPressure);
-  Serial.println("Ground Temperature " + (String)groundTemperature);
-  lastAltitude = pressToAlt(pressureRoll.getData());
-  lastAltitudeBuiltIn = builtInAltitude;
+  Serial.println("Ground Pressure " + (String)getGroundPressure());
+  Serial.println("Ground Temperature " + (String)getGroundTemperature());
+  lastAltitude = pressToAlt(getGroundPressure());
+  lastAltitudeBuiltIn = getAltitude();
   
   // sdSetup();
   
   servoSetup();
   
-#
+
   lastT = micros();
   Serial.println("start");
 
@@ -117,28 +118,28 @@ void setup()
 
 
 void downwardLogic(){
-  if (((float(DESIRED_FLIGHT_TIME - timeElapsed)/1000) * PARACHUTE_TERM_VELOCITY) > altitude ){//main logic works!!!
+  if (((float(DESIRED_FLIGHT_TIME - timeElapsed)/1000) * PARACHUTE_TERM_VELOCITY) > getAltitude() ){//main logic works!!!
     deployChute();
     parachuteDeployed = true;
   }
-  if (altitude < 20.){//saftey (falling down and altitude less than 20)
+  if (getAltitude() < 20.){//saftey (falling down and altitude less than 20)
     deployChute();
     parachuteDeployed = true;
   }
 }
 void upwardLogic(){
   if (lastMovementT + 400 < millis()){
-    if ((predictApogeeIdeal(altitude, altitudeV) < DESIRED_APOGEE)){//cooked
+    if ((predictApogeeIdeal(getAltitude(), getAltitudeVelocity()) < DESIRED_APOGEE)){//cooked
       moveFlaps(0);
       dragFlapDeployed = false;
     }
     else{
-    if (altitude > DESIRED_APOGEE){//cooked
+    if (getAltitude() > DESIRED_APOGEE){//cooked
       moveFlaps(90);
       dragFlapDeployed = true;
     }
     if ((AccY < 0) && (AccY > -10)){//then u are inside of the freefall upward
-      if (predictApogee(altitude,altitudeV,coefOfDrag(zAccel,altitudeV)) > DESIRED_APOGEE){
+      if (predictApogee(getAltitude(),getAltitudeVelocity(),coefOfDrag(zAccel,getAltitudeVelocity())) > DESIRED_APOGEE){
         flapDeploymentTrigger ++;
       }
       else{
@@ -165,12 +166,12 @@ void loop()
 {
   //get data stuff
   timeStuff();
-  baroData();
+  baroDataRead();
   altitudeProcessing(deltaT);
   adxlSetup();
   // IMUdata(deltaT);
 
-  Serial.println(altitude);
+  Serial.println(getAltitude());
   // main control things
   switch (flightState)
   {
@@ -203,7 +204,7 @@ void loop()
     Serial.println("waiting on launch pad");
 
     // flight switching code_______________
-    if ((altitude > 230)){ // tune these thresholds and statements
+    if ((getAltitude() > 230)){ // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
       { // tune this thresholds
@@ -224,7 +225,7 @@ void loop()
     Serial.print(",");
     Serial.println(startTimeStamp);
 
-    if (altitude < 10){numberOfNegatives ++;}
+    if (getAltitude() < 10){numberOfNegatives ++;}
     else {numberOfNegatives = 0;}
 
     

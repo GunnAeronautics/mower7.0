@@ -6,11 +6,11 @@
 // ============================================================================
 
 // BMP390/BMP580 Barometric Sensor Pins
-#define BMP_SCK 23
-#define BMP_MISO 19
-#define BMP_MOSI 18
-#define BMP390_CS 27
-#define BMP580_CS 33
+#define BMP_SCK 14
+#define BMP_MISO 12
+#define BMP_MOSI 13
+#define BMP390_CS 33
+#define BMP580_CS 32
 
 // ADXL343 Accelerometer Pins, -- uses i2c now
 /*#define ADXL343_SCK 13
