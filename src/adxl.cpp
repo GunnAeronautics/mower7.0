@@ -6,9 +6,9 @@
 */
 
 /* Variable definitions */
-double xAccel = 0.0;
-double yAccel = 0.0;
-double zAccel = 0.0;
+extern double xAccel = 0.0;
+extern double yAccel = 0.0;
+extern double zAccel = 0.0;
 
 /* Assign a unique ID to this sensor at the same time */
 /* Using I2C on default Wire bus */
@@ -106,7 +106,7 @@ void adxlSetup(void)
   Wire.begin(ADXL343_SDA, ADXL343_SCL);
 
   /* Initialise the sensor */
-  if(!accel.begin(0x53))  // Address 0x53 if SDO = GND , &Wire
+  if(!accel.begin(ADXL343_ADR))  // Address 0x53 if SDO = GND , &Wire
   {
     /* There was a problem detecting the ADXL343 ... check your connections */
     Serial.println("Could not find a valid ADXL343 sensor, check wiring!");
@@ -126,7 +126,7 @@ void adxlSetup(void)
   accel.printSensorDetails();
   displayDataRate();
   displayRange();
-  Serial.println("");
+  Serial.println("Setup ADXL complete.");
 }
 
 void getADXLData(void)

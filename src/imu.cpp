@@ -8,9 +8,18 @@ float GyroX, GyroY, GyroZ; // deg / sec
 float AccX, AccY, AccZ;    // Gs
 float MagX, MagY, MagZ;    // Gs
 uint8_t systemCali,gyroCali,accelCali,magCali;
+// accelerations in m/s^2 (definitions for externs in imu.h)
 extern double zAccel; // in m/s^2
 extern double xAccel; // in m/s^2
 extern double yAccel; // in m/s^2
+
+// Compile-time or runtime fake IMU support:
+// Define FAKE_IMU in build flags to default to fake mode, or set `fakeimu` at runtime.
+#ifdef FAKE_IMU
+bool fakeimu = true;
+#else
+bool fakeimu = false;
+#endif
 
 float heading;        // in radians
 float zenith;        // in radians
@@ -35,9 +44,25 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 void IMU_BNO055setup()
   {
+    // If running in fake IMU mode, skip hardware init and set sane defaults.
+    if (fakeimu) {
+      orientation.setQuat(1, 0, 0, 0);
+      bnoOrientation.setQuat(1, 0, 0, 0);
+      zenith = 0;
+      zAccel = 9.81;
+      xAccel = 0;
+      yAccel = 0;
+      AccX = AccY = 0;
+      AccZ = 9.81;
+      MagX = MagY = MagZ = 0;
+      systemCali = gyroCali = accelCali = magCali = 0;
+      Serial.println("IMU: fake mode enabled");
+      return;
+    }
+
     Wire.begin(SDA_PIN, SCL_PIN);
     delay(1000);
-  
+
     if (!bno.begin())
     {
       /* There was a problem detecting the BNO055 ... check your connections */
@@ -59,7 +84,7 @@ void IMU_BNO055setup()
     orientation.i = quat.x();
     orientation.j = quat.y();
     orientation.k = quat.z();
-  
+
     Serial.println("Orientation Initialized");
   
   }
@@ -131,6 +156,27 @@ void IMU_BNO055setup()
     // - VECTOR_EULER         - degrees
     // - VECTOR_LINEARACCEL   - m/s^2
     // - VECTOR_GRAVITY       - m/s^2
+    // If fakeimu is enabled, generate synthetic (but plausible) IMU values.
+    if (fakeimu) {
+      unsigned long t = millis();
+      float tt = t / 1000.0f;
+      // simple oscillation for lateral acceleration, steady gravity on Z
+      AccX = 0.0f;
+      AccY = sin(tt * 2.0f * PI) * 0.5f; // +-0.5 g-ish
+      AccZ = 9.81f;
+      // zAccel, xAccel, yAccel expressed in m/s^2
+      zAccel = AccZ;
+      xAccel = AccX;
+      yAccel = AccY;
+      // heading/zenith slowly rotate
+      heading = fmod(tt * 10.0f, 360.0f);
+      zenith = 45.0f; // constant example value (degrees in original code)
+      MagX = MagY = MagZ = 0.0f;
+      bnoW = 1.0f; bnoI = bnoJ = bnoK = 0.0f;
+      systemCali = gyroCali = accelCali = magCali = 0;
+      return;
+    }
+
     imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
     imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
     imu::Vector<3> mag = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);

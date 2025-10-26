@@ -1,13 +1,18 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define FAKE_IMU true
+#define DEBUG true
+
 // ============================================================================
 // HARDWARE PIN CONFIGURATION
 // ============================================================================
+// N channel transistor (3v3 ground)
+#define N_CHANNEL_PIN 4
 
 // BMP390/BMP580 Barometric Sensor Pins
 #define BMP_SCK 14
-#define BMP_MISO 12
+#define BMP_MISO 27
 #define BMP_MOSI 13
 #define BMP390_CS 33
 #define BMP580_CS 32
@@ -17,19 +22,21 @@
 #define ADXL343_MISO 12
 #define ADXL343_MOSI 11
 #define ADXL343_CS 10*/
+#define ADXL343_ADR 0x53
 #define ADXL343_SCL 22
-#define ADXL343_SDA 21
+#define ADXL343_SDA 5
 
-// BNO055 IMU I2C Configuration
+ //BNO055 IMU I2C Configuration
 #define BNO_ADDRESS 0x29
 #define SDA_PIN 21
 #define SCL_PIN 22
 
+
 // SD Card SPI Pins
-#define SD_SCK 18
-#define SD_MISO 19
+#define SD_SCK 19
+#define SD_MISO 21
 #define SD_MOSI 23
-#define SD_CS 5
+#define SD_CS 18
 
 // ============================================================================
 // BNO055 REGISTER CONFIGURATION

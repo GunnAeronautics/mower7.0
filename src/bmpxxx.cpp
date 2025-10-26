@@ -19,56 +19,50 @@ RollingAverage altitudeVRoll(10);
 float lastAltitude = 0;
 float lastAltitudeBuiltIn = 0;
 float altitudeBuiltInV = 0;
+  
+float temp_390 = 0, pressure_390 = 0;
+float temp_580 = 0, pressure_580 = 0;
+bool bmp390_success = false;
+bool bmp580_success = false;
 
 BMPSensor baroSetup()
 {
   mySPI.begin(BMP_SCK, BMP_MISO, BMP_MOSI);
 
-  // Initialize both sensors
-  bool bmp390Found = bmp390.begin_SPI(BMP390_CS, BMP_SCK, BMP_MISO, BMP_MOSI);
+  bool bmp390Found = bmp390.begin(BMP390_CS, &mySPI);
   bool bmp580Found = bmp580.begin(BMP580_CS, &mySPI);
 
-  if (!bmp390Found && !bmp580Found)
-  {
+  if (!bmp390Found && !bmp580Found) {
     Serial.println("No BMP sensors found!");
     activeSensor = BMP_NONE;
     return BMP_NONE;
   }
 
-  if (bmp390Found)
-  {
+  if (bmp390Found) {
     Serial.println("BMP390 sensor found!");
     bmp390.setPressureOversampling(BMP3_OVERSAMPLING_32X);
     bmp390.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
     bmp390.setOutputDataRate(BMP3_ODR_100_HZ);
   }
 
-  if (bmp580Found)
-  {
+  if (bmp580Found) {
     Serial.println("BMP580 sensor found!");
     bmp580.setPressureOversampling(BMP5XX_OVERSAMPLING_32X);
     bmp580.setIIRFilterCoeff(BMP5XX_IIR_FILTER_COEFF_3);
     bmp580.setOutputDataRate(BMP5XX_ODR_100_2_HZ);
   }
 
-  // Set active sensor - prefer dual reading if both available
-  if (bmp390Found && bmp580Found)
-  {
+  if (bmp390Found && bmp580Found) {
     Serial.println("Both sensors found! Using dual sensor mode with averaging.");
-    activeSensor = BMP_390;  // Use this as flag, but will read both
-  }
-  else if (bmp390Found)
-  {
+    activeSensor = BMP_390; // using both
+  } else if (bmp390Found) {
     activeSensor = BMP_390;
-  }
-  else
-  {
+  } else {
     activeSensor = BMP_580;
   }
 
-  // Fill up rolling averages with ground calibration data
-  for (int i = 0; i < 100; i++)
-  {
+  // Calibrate rolling averages
+  for (int i = 0; i < 100; i++) {
     baroDataRead();
     delay(10);
   }
@@ -83,67 +77,68 @@ void baroDataRead()
 {
 #ifdef SIMULATE
   baroData_unified.temperature = 20;
-  baroData_unified.pressure = 1013.25;  // sea level
+  baroData_unified.pressure = 1013.25;
   return;
 #endif
 
-  float temp_390 = 0, pressure_390 = 0;
-  float temp_580 = 0, pressure_580 = 0;
-  bool bmp390_success = false;
-  bool bmp580_success = false;
+  bmp390_success = false;
+  bmp580_success = false;
 
-  // Read from BMP390 if available
-  if (bmp390.begin_SPI(BMP390_CS, BMP_SCK, BMP_MISO, BMP_MOSI) || activeSensor == BMP_390)
-  {
-    if (bmp390.performReading())
-    {
-      temp_390 = bmp390.temperature;
-      pressure_390 = (bmp390.pressure / 100.0);  // Convert to hPa
-      bmp390_success = true;
-    }
-    else
-    {
-      Serial.println("BMP390 failed to perform reading!");
-    }
+  // ---- BMP390 ----
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+  digitalWrite(BMP580_CS, HIGH);
+  digitalWrite(BMP390_CS, LOW);
+  delayMicroseconds(5); // brief CS settle time
+
+  if (bmp390.performReading()) {
+    
+    temp_390 = bmp390.temperature;
+    pressure_390 = bmp390.pressure / 100.0; // hPa
+    #ifdef DEBUG
+    Serial.println("RAW BMP390 reading: " + String(temp_390) + " C, " + String(pressure_390) + " hPa");
+    #endif
+    bmp390_success = true;
+  } else {
+    Serial.println("BMP390 failed to perform reading!");
   }
+  digitalWrite(BMP390_CS, HIGH);
+  SPI.endTransaction();
 
-  // Read from BMP580 if available
-  if (bmp580.begin(BMP580_CS, &mySPI) || activeSensor == BMP_580)
-  {
-    if (bmp580.performReading())
-    {
-      temp_580 = bmp580.temperature;
-      pressure_580 = (bmp580.pressure / 100.0);  // Convert to hPa
-      bmp580_success = true;
-    }
-    else
-    {
-      Serial.println("BMP580 failed to perform reading!");
-    }
+
+  // ---- BMP580 ----
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+  digitalWrite(BMP390_CS, HIGH);
+  digitalWrite(BMP580_CS, LOW);
+  delayMicroseconds(5);
+
+  if (bmp580.performReading()) {
+    temp_580 = bmp580.temperature;
+    pressure_580 = bmp580.pressure / 100.0;
+    bmp580_success = true;
+    #ifdef DEBUG
+    Serial.println("RAW BMP580 reading: " + String(temp_580) + " C, " + String(pressure_580) + " hPa");
+    #endif
+
+  } else {
+    Serial.println("BMP580 failed to perform reading!");
   }
+  digitalWrite(BMP580_CS, HIGH);
+  SPI.endTransaction();
 
-  // Average the data from both sensors if both are available
-  if (bmp390_success && bmp580_success)
-  {
+  // ---- Combine results ----
+  if (bmp390_success && bmp580_success) {
     baroData_unified.temperature = (temp_390 + temp_580) / 2.0;
     baroData_unified.pressure = (pressure_390 + pressure_580) / 2.0;
-    baroData_unified.sensorType = BMP_390;  // Mark as dual reading
-    Serial.println("Dual sensor reading - averaging BMP390 and BMP580");
-  }
-  else if (bmp390_success)
-  {
+    baroData_unified.sensorType = BMP_390; // dual flag
+  } else if (bmp390_success) {
     baroData_unified.temperature = temp_390;
     baroData_unified.pressure = pressure_390;
     baroData_unified.sensorType = BMP_390;
-  }
-  else if (bmp580_success)
-  {
+  } else if (bmp580_success) {
     baroData_unified.temperature = temp_580;
     baroData_unified.pressure = pressure_580;
     baroData_unified.sensorType = BMP_580;
-  }
-  else
-  {
+  } else {
     Serial.println("No sensors available for reading!");
     return;
   }
@@ -151,6 +146,7 @@ void baroDataRead()
   temperatureRoll.newData(baroData_unified.temperature);
   pressureRoll.newData(baroData_unified.pressure);
 }
+
 
 void altitudeProcessing(int deltaT)
 {
@@ -211,28 +207,45 @@ BMPSensor getActiveSensor()
   return activeSensor;
 }
 
-BaroData getBaroData_BMP390()
+float getBaroData_BMP390_temp()
 {
   if (activeSensor == BMP_390)
   {
-    return baroData_unified;
+
+    return temp_390;
   }
-  // Return zeroed struct if BMP390 is not active
-  BaroData empty = {0};
-  empty.sensorType = BMP_NONE;
-  return empty;
+  // Return zero if BMP390 is not active
+  return 0;
 }
 
-BaroData getBaroData_BMP580()
+float getBaroData_BMP390_pressure()
+{
+  if (activeSensor == BMP_390)
+  {
+    return pressure_390;
+  }
+  // Return zero if BMP390 is not active
+  return 0;
+}
+
+float getBaroData_BMP580_pressure()
 {
   if (activeSensor == BMP_580)
   {
-    return baroData_unified;
+    return pressure_580;
   }
-  // Return zeroed struct if BMP580 is not active
-  BaroData empty = {0};
-  empty.sensorType = BMP_NONE;
-  return empty;
+  // Return zero if BMP580 is not active
+  return 0;
+}
+
+float getBaroData_BMP580_temp()
+{
+  if (activeSensor == BMP_580)
+  {
+    return temp_580;
+  }
+  // Return zero if BMP580 is not active
+  return 0;
 }
 
 bool isBMP390Active()

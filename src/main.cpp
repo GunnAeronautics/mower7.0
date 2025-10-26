@@ -1,6 +1,7 @@
 // Sup guys this is Tony the main programmer on the ASTRA24-25 tarc team
 // make sure to use camelCase for variables and functions
 // use ALLCAPS and UNDER_SCORES for definitions 
+// 
 #include <Arduino.h>
 #include <math.h>
 
@@ -86,6 +87,12 @@ void dataLogging(){
 }
 void setup()
 {
+  delay(3000); // wait for current to settle
+
+  pinMode(N_CHANNEL_PIN, OUTPUT);
+  digitalWrite(N_CHANNEL_PIN, HIGH); // power on the sensors
+
+  // Serial1.begin(115200, SERIAL_8N1, 16, 17); // debug serial
   Serial.begin(115200);
   Serial.println("Serial Begin");
 
@@ -95,15 +102,16 @@ void setup()
   // IMU_BNO055setup();
   // Serial.println("BNO055 Attached");
   adxlSetup();
+  Serial.println("ADXL343 Attached");
+
   Serial.println("Ground Pressure " + (String)getGroundPressure());
   Serial.println("Ground Temperature " + (String)getGroundTemperature());
   lastAltitude = pressToAlt(getGroundPressure());
   lastAltitudeBuiltIn = getAltitude();
   
-  // sdSetup();
+  sdSetup();
   
   servoSetup();
-  
 
   lastT = micros();
   Serial.println("start");
@@ -164,11 +172,25 @@ float predAlt = 0;
 float error;
 void loop()
 {
+  #ifdef DEBUG 
+    delay(1000); // you only want a delay because serial printing is gets bogged down 
+  #endif
+  Serial.println("---------------------");
   //get data stuff
+  Serial.println("Starting loop");
+  Serial.println("Time Elapsed: " + String(timeElapsed));
   timeStuff();
+  Serial.println("Delta T: " + String(deltaT));
+  Serial.println("Main BARO ALT: " + String(getAltitude()) );
+  Serial.println("BMP580 temp and pressure: " + String(getBaroData_BMP580_temp()) + 
+  ", " + String(getBaroData_BMP580_pressure()));
+  Serial.println("BMP390 temp and pressure: " + String(getBaroData_BMP390_temp()) + 
+  ", " + String(getBaroData_BMP390_pressure()));
+  Serial.println();
   baroDataRead();
+  Serial.println("altitudeProcessing");
   altitudeProcessing(deltaT);
-  adxlSetup();
+  // adxlSetup();
   // IMUdata(deltaT);
 
   Serial.println(getAltitude());
@@ -227,7 +249,6 @@ void loop()
 
     if (getAltitude() < 10){numberOfNegatives ++;}
     else {numberOfNegatives = 0;}
-
     
     if ((numberOfNegatives > 10))//100 sec timer
     {
@@ -253,6 +274,7 @@ void loop()
 //wow looks like the code is super neat < 200 lines woaw
 /*
 If u are reading this it looks like ur the 1 other person who has read the code
+persons reading this count: 2
 Heres a donut:
                        $@@@$$$######                                           
                      $@@@@@@$$#**!=!!**##                                      

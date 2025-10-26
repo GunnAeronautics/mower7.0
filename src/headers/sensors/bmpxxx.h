@@ -48,6 +48,15 @@ BMPSensor baroSetup();
 void baroDataRead();
 
 /**
+ * Read bmp specific data
+ */
+
+float getBaroData_BMP390_pressure();
+float getBaroData_BMP390_temp();
+float getBaroData_BMP580_pressure();
+float getBaroData_BMP580_temp();
+
+/**
  * Process altitude and velocity calculations
  * @param deltaT Time delta in milliseconds
  */
