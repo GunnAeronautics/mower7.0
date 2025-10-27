@@ -38,9 +38,9 @@
 
 // SD Card SPI Pins
 #define SD_SCK 19
-#define SD_MISO 21
-#define SD_MOSI 23
-#define SD_CS 18
+#define SD_MISO 21//correct
+#define SD_MOSI 3//23
+#define SD_CS 23//18
 
 // ============================================================================
 // BNO055 REGISTER CONFIGURATION
