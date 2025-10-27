@@ -87,11 +87,7 @@ void dataLogging(){
 }
 void setup()
 {
-  delay(3000); // wait for current to settle
-
-  pinMode(N_CHANNEL_PIN, OUTPUT);
-  digitalWrite(N_CHANNEL_PIN, HIGH); // power on the sensors
-
+  
   // Serial1.begin(115200, SERIAL_8N1, 16, 17); // debug serial
   Serial.begin(115200);
   Serial.println("Serial Begin");

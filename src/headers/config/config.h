@@ -7,13 +7,17 @@
 // ============================================================================
 // HARDWARE PIN CONFIGURATION
 // ============================================================================
-// N channel transistor (3v3 ground)
-#define N_CHANNEL_PIN 4
+
+// Servo Pins
+#define SERVO_K 25
+#define SERVO_L 26
+#define SERVO_M 35
+#define SERVO_N 34
 
 // BMP390/BMP580 Barometric Sensor Pins
-#define BMP_SCK 14
-#define BMP_MISO 27
-#define BMP_MOSI 13
+#define BMP_SCK 14 //clk
+#define BMP_MISO 27 //sdo
+#define BMP_MOSI 13 //sda
 #define BMP390_CS 33
 #define BMP580_CS 32
 
