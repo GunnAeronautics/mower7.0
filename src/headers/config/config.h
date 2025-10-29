@@ -9,15 +9,15 @@
 // ============================================================================
 
 // Servo Pins
-#define SERVO_K 25
-#define SERVO_L 26
-#define SERVO_M 35
-#define SERVO_N 34
+#define SERVO_K 26 // 1
+#define SERVO_L 25 // 2
+#define SERVO_M 35 // 3
+#define SERVO_N 34 // 4
 
 // BMP390/BMP580 Barometric Sensor Pins
-#define BMP_SCK 14 //clk
-#define BMP_MISO 27 //sdo
-#define BMP_MOSI 13 //sda
+#define BMP_SCK 13 //clk // scl
+#define BMP_MISO 27 //sdo // 
+#define BMP_MOSI 14 //sda //
 #define BMP390_CS 33
 #define BMP580_CS 32
 
