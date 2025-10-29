@@ -1,7 +1,7 @@
 // Sup guys this is Tony the main programmer on the ASTRA24-25 tarc team
 // make sure to use camelCase for variables and functions
-// use ALLCAPS and UNDER_SCORES for definitions 
-// 
+// use ALLCAPS and UNDER_SCORES for definitions
+//
 #include <Arduino.h>
 #include <math.h>
 
@@ -27,26 +27,27 @@
 unsigned long lastT;
 static int deltaT;
 unsigned long startTimeStamp = 0; // ms
-long timeElapsed = 0;    // time elapsed in flight (ms)
-int lastMovementT = 0;   // ms
+long timeElapsed = 0;             // time elapsed in flight (ms)
+int lastMovementT = 0;            // ms
 
 // Deployment states
 bool dragFlapDeployed = false;
 bool parachuteDeployed = false;
 
 // States & triggers
-// VVV (IMPORTANT) set 0 for testing logging data, 1 for arming the rocket 
+// VVV (IMPORTANT) set 0 for testing logging data, 1 for arming the rocket
 int flightState = 1;                   // state of the rocket's control
 int flightStateAdvancementTrigger = 0; // counts number of times state switching event occurs
 int flapDeploymentTrigger = 0;         // counts # of times you should deploy flaps
 int numberOfNegatives = 0;
 KalmanVelocityEstimator kalman(1, 3);
 
-//everything related to timing
-void timeStuff(){
-  deltaT = micros() - lastT;//deltaT
+// everything related to timing
+void timeStuff()
+{
+  deltaT = micros() - lastT; // deltaT
   lastT = micros();
-  //to set a timer for when the rocket launches
+  // to set a timer for when the rocket launches
   if ((startTimeStamp == 0) && (flightState != 0))
   {
     timeElapsed = 0;
@@ -61,34 +62,36 @@ float predictApogee(float alt, float v, float dragCoef)
 {
   return alt + log((dragCoef * v * v / 9.81) + 1) / (2.0 * dragCoef); // copied from mower6.0
 }
-float predictApogeeIdeal(float alt, float v){
-  return alt + pow(v,2)/2./GRAVITY;
+float predictApogeeIdeal(float alt, float v)
+{
+  return alt + pow(v, 2) / 2. / GRAVITY;
 }
-float coefOfDrag(float accel,float v){
-  float coef = abs(accel/v/v);
+float coefOfDrag(float accel, float v)
+{
+  float coef = abs(accel / v / v);
   return coef;
 }
-void dataLogging(){
+void dataLogging()
+{
   BaroData baro = getBaroData();
-  String dataString = String(timeElapsed) + ',' +   // rocket flight time
-                      String(baro.pressure,DATAPRECISION) + ',' +      // pressure
-                      String(baro.altitude,DATAPRECISION) + ',' +      // alt
-                      String(baro.altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
-                      String(zAccel,DATAPRECISION) + ',' +//global axis
-                      String(AccY,DATAPRECISION) + ',' +//local axis
-                      String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
-                      String(predictApogee(baro.altitude, baro.altitudeV, coefOfDrag(AccY,baro.altitudeV)),DATAPRECISION) + ',' + // apogee prediction
-                      String(coefOfDrag(AccY,baro.altitudeV)) + ',' + 
+  String dataString = String(timeElapsed) + ',' +                                                                                   // rocket flight time
+                      String(baro.pressure, DATAPRECISION) + ',' +                                                                  // pressure
+                      String(baro.altitude, DATAPRECISION) + ',' +                                                                  // alt
+                      String(baro.altitudeV, DATAPRECISION) + ',' +                                                                 // velocity - baro derived
+                      String(zAccel, DATAPRECISION) + ',' +                                                                         // global axis
+                      String(AccY, DATAPRECISION) + ',' +                                                                           // local axis
+                      String(zenith, DATAPRECISION) + ',' +                                                                         // angle from the vertical
+                      String(predictApogee(baro.altitude, baro.altitudeV, coefOfDrag(AccY, baro.altitudeV)), DATAPRECISION) + ',' + // apogee prediction
+                      String(coefOfDrag(AccY, baro.altitudeV)) + ',' +
                       (String)parachuteDeployed + ',' +
-                      (String)dragFlapDeployed + ',' + 
-                      (String)flightState + ',' + 
+                      (String)dragFlapDeployed + ',' +
+                      (String)flightState + ',' +
                       "\n";
   logData(dataString);
 }
 void setup()
 {
-  
-  // Serial1.begin(115200, SERIAL_8N1, 16, 17); // debug serial
+
   Serial.begin(115200);
   Serial.println("Serial Begin");
 
@@ -104,62 +107,71 @@ void setup()
   Serial.println("Ground Temperature " + (String)getGroundTemperature());
   lastAltitude = pressToAlt(getGroundPressure());
   lastAltitudeBuiltIn = getAltitude();
-  
+
   sdSetup();
-  
+
   servoSetup();
 
   lastT = micros();
   Serial.println("start");
 
-  pinMode(2,OUTPUT);//blue LED
-  digitalWrite(2,HIGH);
+  pinMode(2, OUTPUT); // blue LED
+  digitalWrite(2, HIGH);
 
   delay(5000);
-
 }
 
-
-
-void downwardLogic(){
-  if (((float(DESIRED_FLIGHT_TIME - timeElapsed)/1000) * PARACHUTE_TERM_VELOCITY) > getAltitude() ){//main logic works!!!
+void downwardLogic()
+{
+  if (((float(DESIRED_FLIGHT_TIME - timeElapsed) / 1000) * PARACHUTE_TERM_VELOCITY) > getAltitude())
+  { // main logic works!!!
     deployChute();
     parachuteDeployed = true;
   }
-  if (getAltitude() < 20.){//saftey (falling down and altitude less than 20)
+  if (getAltitude() < 20.)
+  { // saftey (falling down and altitude less than 20)
     deployChute();
     parachuteDeployed = true;
   }
 }
-void upwardLogic(){
-  if (lastMovementT + 400 < millis()){
-    if ((predictApogeeIdeal(getAltitude(), getAltitudeVelocity()) < DESIRED_APOGEE)){//cooked
+void upwardLogic()
+{
+  if (lastMovementT + 400 < millis())
+  {
+    if ((predictApogeeIdeal(getAltitude(), getAltitudeVelocity()) < DESIRED_APOGEE))
+    { // cooked
       moveFlaps(0);
       dragFlapDeployed = false;
     }
-    else{
-    if (getAltitude() > DESIRED_APOGEE){//cooked
-      moveFlaps(90);
-      dragFlapDeployed = true;
-    }
-    if ((AccY < 0) && (AccY > -10)){//then u are inside of the freefall upward
-      if (predictApogee(getAltitude(),getAltitudeVelocity(),coefOfDrag(zAccel,getAltitudeVelocity())) > DESIRED_APOGEE){
-        flapDeploymentTrigger ++;
+    else
+    {
+      if (getAltitude() > DESIRED_APOGEE)
+      { // cooked
+        moveFlaps(90);
+        dragFlapDeployed = true;
       }
-      else{
-        flapDeploymentTrigger = 0;
+      if ((AccY < 0) && (AccY > -10))
+      { // then u are inside of the freefall upward
+        if (predictApogee(getAltitude(), getAltitudeVelocity(), coefOfDrag(zAccel, getAltitudeVelocity())) > DESIRED_APOGEE)
+        {
+          flapDeploymentTrigger++;
+        }
+        else
+        {
+          flapDeploymentTrigger = 0;
+        }
       }
-    }
-    if (flapDeploymentTrigger >= 3) {
-      moveFlaps(90);
-      dragFlapDeployed = true;
-      lastMovementT = millis();
-    }
-    else{
-      moveFlaps(0);
-      dragFlapDeployed = false;
-    }
-
+      if (flapDeploymentTrigger >= 3)
+      {
+        moveFlaps(90);
+        dragFlapDeployed = true;
+        lastMovementT = millis();
+      }
+      else
+      {
+        moveFlaps(0);
+        dragFlapDeployed = false;
+      }
     }
   }
 }
@@ -168,20 +180,22 @@ float predAlt = 0;
 float error;
 void loop()
 {
-  #ifdef DEBUG 
-    delay(1000); // you only want a delay because serial printing is gets bogged down 
-  #endif
+#ifdef DEBUG
+  delay(1000); // you only want a delay because serial printing is gets bogged down
+#endif
   Serial.println("---------------------");
-  //get data stuff
+  // get data stuff
   Serial.println("Starting loop");
   Serial.println("Time Elapsed: " + String(timeElapsed));
   timeStuff();
   Serial.println("Delta T: " + String(deltaT));
-  Serial.println("Main BARO ALT: " + String(getAltitude()) );
-  Serial.println("BMP580 temp and pressure: " + String(getBaroData_BMP580_temp()) + 
-  ", " + String(getBaroData_BMP580_pressure()));
-  Serial.println("BMP390 temp and pressure: " + String(getBaroData_BMP390_temp()) + 
-  ", " + String(getBaroData_BMP390_pressure()));
+  Serial.println("Main BARO ALT: " + String(getAltitude()));
+
+  Serial.println("BMP580 temp and pressure: " + String(getBaroData_BMP580_temp()) +
+                 ", " + String(getBaroData_BMP580_pressure()));
+  Serial.println("BMP390 temp and pressure: " + String(getBaroData_BMP390_temp()) +
+                 ", " + String(getBaroData_BMP390_pressure()));
+
   Serial.println();
   baroDataRead();
   Serial.println("altitudeProcessing");
@@ -195,12 +209,12 @@ void loop()
   {
   case 0: // happy data printing mode
     dataLogging();
-  
+
     // accelVelo += (zAccel-9.8) * deltaT / 1000000;
     // error = altitude - predAlt;
     // accelVelo += error / deltaT*1000000 * 0.1;
     // predAlt = altitude + accelVelo *deltaT/1000000;
-    
+
     // Serial.print(accelVelo);Serial.print(",");
 
     // Serial.print(altitudeV);Serial.print(",");
@@ -213,7 +227,7 @@ void loop()
     // Serial.print(magCali);Serial.print(",");
 
     // Serial.print(String(9.8-zAccel,DATAPRECISION));Serial.print(",");
-    
+
     Serial.println(deltaT);
     break;
 
@@ -222,19 +236,23 @@ void loop()
     Serial.println("waiting on launch pad");
 
     // flight switching code_______________
-    if ((getAltitude() > 230)){ // tune these thresholds and statements
+    if ((getAltitude() > 230))
+    { // tune these thresholds and statements
       flightStateAdvancementTrigger++;
       if (flightStateAdvancementTrigger > 3)
       { // tune this thresholds
 
         startTimeStamp = millis(); // start the flight timer here
-        deployChute();      
+        deployChute();
 
         flightState++;
       }
     }
 
-    else{flightStateAdvancementTrigger = 0;}
+    else
+    {
+      flightStateAdvancementTrigger = 0;
+    }
     // switching code end__________________
     break;
   case 2: // flight
@@ -243,50 +261,55 @@ void loop()
     Serial.print(",");
     Serial.println(startTimeStamp);
 
-    if (getAltitude() < 10){numberOfNegatives ++;}
-    else {numberOfNegatives = 0;}
-    
-    if ((numberOfNegatives > 10))//100 sec timer
+    if (getAltitude() < 10)
     {
-        // flightState++;
-        undeployChute();
-      }
-    break;    
-  // case 3:
-  //   dataLogging();
-
-  //   if (altitude <.5){numberOfNegatives ++;}
-  //   else {numberOfNegatives = 0;}
-
-    
-  //   if ((numberOfNegatives > 20))//100 sec timer
-  //   {
-  //     deployChute();      
-  //   }
-  //   break;
-  // }
+      numberOfNegatives++;
     }
+    else
+    {
+      numberOfNegatives = 0;
+    }
+
+    if ((numberOfNegatives > 10)) // 100 sec timer
+    {
+      // flightState++;
+      undeployChute();
+    }
+    break;
+    // case 3:
+    //   dataLogging();
+
+    //   if (altitude <.5){numberOfNegatives ++;}
+    //   else {numberOfNegatives = 0;}
+
+    //   if ((numberOfNegatives > 20))//100 sec timer
+    //   {
+    //     deployChute();
+    //   }
+    //   break;
+    // }
+  }
 }
-//wow looks like the code is super neat < 200 lines woaw
+// wow looks like the code is super neat < 200 lines woaw
 /*
 If u are reading this it looks like ur the 1 other person who has read the code
 persons reading this count: 2
 Heres a donut:
-                       $@@@$$$######                                           
-                     $@@@@@@$$#**!=!!**##                                      
-                   #$$@@@@@$$$##!=:::;=!*###                                   
-                  *#$$$@@@@@$$$$#*=.~:;;!!*#$$$                                
-                 =*##$$$$@@@@$$$$##*;,-:=!*#$$$@$#                             
-                 =*###$$$$$$$$$$$$$$#*!-~=!*#$$@@@$#                           
-                 ;!!*####$$$$$$$$$$$$$##*!==!*#$$$@$$*                         
-                 ;=!**####$$$$$$$$$$$$$$###**!!*##$$$$#                        
-                  ;=!!***######$$$$$$$$$$$$$############                       
-                  ~;=!!!!**#*######$#$$$$$$$############*                      
-                   ~:;=!!!*!***#*######################**=                     
-                    -~;;=!!!!!********#############****!!=                     
-                      -:;;;==!!!!!!**!****************!!=;                     
-                       .-~::;;====!!!!!!*!!*!**!!!!!!==;;~                     
-                         .--~::;;=;====!!=!==!!=!!===;;:~                      
-                            .,-~~:::;:;;;;=;;==;;;;;::~-                       
-                               ..,--~~~~::::::::::~--.                         
+                       $@@@$$$######
+                     $@@@@@@$$#**!=!!**##
+                   #$$@@@@@$$$##!=:::;=!*###
+                  *#$$$@@@@@$$$$#*=.~:;;!!*#$$$
+                 =*##$$$$@@@@$$$$##*;,-:=!*#$$$@$#
+                 =*###$$$$$$$$$$$$$$#*!-~=!*#$$@@@$#
+                 ;!!*####$$$$$$$$$$$$$##*!==!*#$$$@$$*
+                 ;=!**####$$$$$$$$$$$$$$###**!!*##$$$$#
+                  ;=!!***######$$$$$$$$$$$$$############
+                  ~;=!!!!**#*######$#$$$$$$$############*
+                   ~:;=!!!*!***#*######################**=
+                    -~;;=!!!!!********#############****!!=
+                      -:;;;==!!!!!!**!****************!!=;
+                       .-~::;;====!!!!!!*!!*!**!!!!!!==;;~
+                         .--~::;;=;====!!=!==!!=!!===;;:~
+                            .,-~~:::;:;;;;=;;==;;;;;::~-
+                               ..,--~~~~::::::::::~--.
 */

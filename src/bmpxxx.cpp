@@ -25,6 +25,15 @@ float temp_580 = 0, pressure_580 = 0;
 bool bmp390_success = false;
 bool bmp580_success = false;
 
+/*
+Effective timeline for sensor reading:
+
+~2 ms startup
+
+~38.4 ms oversampling delay for BMP390 at 32x OSR
+Limited to ~26 Hz effective read rate for BMP580 at 32x OSR
+*/
+
 BMPSensor baroSetup()
 {
   mySPI.begin(BMP_SCK, BMP_MISO, BMP_MOSI);
@@ -85,15 +94,13 @@ void baroDataRead()
   bmp580_success = false;
 
   // ---- BMP390 ----
-  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
   digitalWrite(BMP580_CS, HIGH);
   digitalWrite(BMP390_CS, LOW);
-  delayMicroseconds(5); // brief CS settle time
 
   if (bmp390.performReading()) {
     
     temp_390 = bmp390.temperature;
-    pressure_390 = bmp390.pressure / 100.0; // hPa
+    pressure_390 = bmp390.pressure / 100.0; // pressure read in Pascals, convert to hPa
     #ifdef DEBUG
     Serial.println("RAW BMP390 reading: " + String(temp_390) + " C, " + String(pressure_390) + " hPa");
     #endif
@@ -102,18 +109,13 @@ void baroDataRead()
     Serial.println("BMP390 failed to perform reading!");
   }
   digitalWrite(BMP390_CS, HIGH);
-  SPI.endTransaction();
-
 
   // ---- BMP580 ----
-  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
-  digitalWrite(BMP390_CS, HIGH);
   digitalWrite(BMP580_CS, LOW);
-  delayMicroseconds(5);
 
   if (bmp580.performReading()) {
     temp_580 = bmp580.temperature;
-    pressure_580 = bmp580.pressure / 100.0;
+    pressure_580 = bmp580.pressure; // pressure read in hPa
     bmp580_success = true;
     #ifdef DEBUG
     Serial.println("RAW BMP580 reading: " + String(temp_580) + " C, " + String(pressure_580) + " hPa");
@@ -122,8 +124,6 @@ void baroDataRead()
   } else {
     Serial.println("BMP580 failed to perform reading!");
   }
-  digitalWrite(BMP580_CS, HIGH);
-  SPI.endTransaction();
 
   // ---- Combine results ----
   if (bmp390_success && bmp580_success) {
