@@ -36,7 +36,7 @@ bool parachuteDeployed = false;
 
 // States & triggers
 // VVV (IMPORTANT) set 0 for testing logging data, 1 for arming the rocket
-int flightState = 1;                   // state of the rocket's control
+int flightState = 0;                   // state of the rocket's control
 int flightStateAdvancementTrigger = 0; // counts number of times state switching event occurs
 int flapDeploymentTrigger = 0;         // counts # of times you should deploy flaps
 int numberOfNegatives = 0;
@@ -83,32 +83,22 @@ void writeDataHeader(){
   logData(datalogHeader);
 }
 void dataLogging(){
-  String dataString = String(timeElapsed) + ',' +   // rocket flight time
-                      String(pressure,DATAPRECISION) + ',' +      // pressure
-                      String(altitude,DATAPRECISION) + ',' +      // alt
-                      String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
-                      String(zAccel,DATAPRECISION) + ',' +//global axis
-                      String(AccY,DATAPRECISION) + ',' +//local axis
-                      String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
-                      String(predictApogee(altitude, altitudeV, coefOfDrag(AccY,altitudeV)),DATAPRECISION) + ',' + // apogee prediction
-                      String(coefOfDrag(AccY,altitudeV)) + ',' + 
-void dataLogging()
-{
+
   BaroData baro = getBaroData();
-  String dataString = String(timeElapsed) + ',' +                                                                                   // rocket flight time
-                      String(baro.pressure, DATAPRECISION) + ',' +                                                                  // pressure
-                      String(baro.altitude, DATAPRECISION) + ',' +                                                                  // alt
-                      String(baro.altitudeV, DATAPRECISION) + ',' +                                                                 // velocity - baro derived
-                      String(zAccel, DATAPRECISION) + ',' +                                                                         // global axis
-                      String(AccY, DATAPRECISION) + ',' +                                                                           // local axis
-                      String(zenith, DATAPRECISION) + ',' +                                                                         // angle from the vertical
-                      String(predictApogee(baro.altitude, baro.altitudeV, coefOfDrag(AccY, baro.altitudeV)), DATAPRECISION) + ',' + // apogee prediction
-                      String(coefOfDrag(AccY, baro.altitudeV)) + ',' +
-                      (String)parachuteDeployed + ',' +
-                      (String)dragFlapDeployed + ',' +
-                      (String)flightState + ',' +
-                      "\n";
-  logData(dataString);
+  // String dataString = String(timeElapsed) + ',' +                                                                                   // rocket flight time
+  //                     String(baro.pressure, DATAPRECISION) + ',' +                                                                  // pressure
+  //                     String(baro.altitude, DATAPRECISION) + ',' +                                                                  // alt
+  //                     String(baro.altitudeV, DATAPRECISION) + ',' +                                                                 // velocity - baro derived
+  //                     String(zAccel, DATAPRECISION) + ',' +                                                                         // global axis
+  //                     String(AccY, DATAPRECISION) + ',' +                                                                           // local axis
+  //                     String(zenith, DATAPRECISION) + ',' +                                                                         // angle from the vertical
+  //                     String(predictApogee(baro.altitude, baro.altitudeV, coefOfDrag(AccY, baro.altitudeV)), DATAPRECISION) + ',' + // apogee prediction
+  //                     String(coefOfDrag(AccY, baro.altitudeV)) + ',' +
+  //                     (String)parachuteDeployed + ',' +
+  //                     (String)dragFlapDeployed + ',' +
+  //                     (String)flightState + ',' +
+  //                     "\n";
+  // logData(dataString);
 }
 void setup()
 {
@@ -201,35 +191,41 @@ float predAlt = 0;
 float error;
 void loop()
 {
-#ifdef DEBUG
-  delay(1000); // you only want a delay because serial printing is gets bogged down
-#endif
-  Serial.println("---------------------");
-  // get data stuff
-  Serial.println("Starting loop");
-  Serial.println("Time Elapsed: " + String(timeElapsed));
-  timeStuff();
-  Serial.println("Delta T: " + String(deltaT));
-  Serial.println("Main BARO ALT: " + String(getAltitude()));
-
-  Serial.println("BMP580 temp and pressure: " + String(getBaroData_BMP580_temp()) +
-                 ", " + String(getBaroData_BMP580_pressure()));
-  Serial.println("BMP390 temp and pressure: " + String(getBaroData_BMP390_temp()) +
-                 ", " + String(getBaroData_BMP390_pressure()));
-
+  Serial.print("Alitude: ");
+  Serial.print(getAltitude());
   Serial.println();
+  // Serial.print(",");
+  // Serial.print("BMP580: ");
+  // Serial.println(getBaroData_BMP580_pressure());
+// #ifdef DEBUG
+//   // delay(1000); // you only want a delay because serial printing is gets bogged down
+// #endif
+  // Serial.println("---------------------");
+  // get data stuff
+  // Serial.println("Starting loop");
+  // Serial.println("Time Elapsed: " + String(timeElapsed));
+  // timeStuff();
+  // Serial.println("Delta T: " + String(deltaT));
+  // Serial.println("Main BARO ALT: " + String(getAltitude()));
+
+  // Serial.println("BMP580 temp and pressure: " + String(getBaroData_BMP580_temp()) +
+  //                ", " + String(getBaroData_BMP580_pressure()));
+  // Serial.println("BMP390 temp and pressure: " + String(getBaroData_BMP390_temp()) +
+  //                ", " + String(getBaroData_BMP390_pressure()));
+  // Serial.println();
+  // Serial.println();
   baroDataRead();
-  Serial.println("altitudeProcessing");
+  // Serial.println("altitudeProcessing");
   altitudeProcessing(deltaT);
   // adxlSetup();
   // IMUdata(deltaT);
 
-  Serial.println(getAltitude());
+  // Serial.println(getAltitude());
   // main control things
   switch (flightState)
   {
   case 0: // happy data printing mode
-    dataLogging();
+    // dataLogging();
 
     // accelVelo += (zAccel-9.8) * deltaT / 1000000;
     // error = altitude - predAlt;
@@ -249,7 +245,7 @@ void loop()
 
     // Serial.print(String(9.8-zAccel,DATAPRECISION));Serial.print(",");
 
-    Serial.println(deltaT);
+    // Serial.println(deltaT);
     break;
 
   case 1: // on the launch pad waiting to be ignited
