@@ -27,8 +27,8 @@
 unsigned long lastT;
 static int deltaT;
 unsigned long startTimeStamp = 0; // ms
-long timeElapsed = 0;             // time elapsed in flight (ms)
-int lastMovementT = 0;            // ms
+long timeElapsed = 0;    // time elapsed in flight (ms)
+long lastMovementT = 0;   // ms
 
 // Deployment states
 bool dragFlapDeployed = false;
@@ -71,6 +71,27 @@ float coefOfDrag(float accel, float v)
   float coef = abs(accel / v / v);
   return coef;
 }
+void writeDataHeader(){
+  String datalogHeader = 
+  "timeElapsed,"
+  "pressure,"
+  "alt,"
+  "altV,"
+  "globalVert"
+  "so on"
+  "\n";
+  logData(datalogHeader);
+}
+void dataLogging(){
+  String dataString = String(timeElapsed) + ',' +   // rocket flight time
+                      String(pressure,DATAPRECISION) + ',' +      // pressure
+                      String(altitude,DATAPRECISION) + ',' +      // alt
+                      String(altitudeV,DATAPRECISION) + ',' +     // velocity - baro derived
+                      String(zAccel,DATAPRECISION) + ',' +//global axis
+                      String(AccY,DATAPRECISION) + ',' +//local axis
+                      String(zenith,DATAPRECISION) + ',' +        // angle from the vertical
+                      String(predictApogee(altitude, altitudeV, coefOfDrag(AccY,altitudeV)),DATAPRECISION) + ',' + // apogee prediction
+                      String(coefOfDrag(AccY,altitudeV)) + ',' + 
 void dataLogging()
 {
   BaroData baro = getBaroData();

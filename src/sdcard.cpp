@@ -87,7 +87,6 @@ void sdSetup()
   logFilename = getNewLogFilename();
   Serial.println(logFilename);
 
-  datalogHeader = "timeElapsed,pressure,alt,altV,globalVertAccel,localVertAccel,zenith,predApogee,dragCoef,parachuteDeployed?,flapsDeployed?,flightState\n";
   writeCSVLine(SD, logFilename.c_str(), datalogHeader.c_str());
 
 
